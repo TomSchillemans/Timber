@@ -24,12 +24,16 @@ fn insert_root_folder(folders: &mut Vec<RootFolder>, path: String) -> bool {
     true
 }
 
+/// Turns the raw JSON value read from the store into a folder list,
+/// defaulting to empty when absent or when it fails to deserialize.
+fn resolve_stored_folders(raw: Option<serde_json::Value>) -> Vec<RootFolder> {
+    raw.and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default()
+}
+
 fn load_folders<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<RootFolder>, String> {
     let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
-    Ok(store
-        .get(FOLDERS_KEY)
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default())
+    Ok(resolve_stored_folders(store.get(FOLDERS_KEY)))
 }
 
 fn save_folders<R: tauri::Runtime>(
@@ -48,6 +52,11 @@ pub fn add_root_folder(app: AppHandle, path: String) -> Result<Vec<RootFolder>, 
     insert_root_folder(&mut folders, path);
     save_folders(&app, &folders)?;
     Ok(folders)
+}
+
+#[tauri::command]
+pub fn list_root_folders(app: AppHandle) -> Result<Vec<RootFolder>, String> {
+    load_folders(&app)
 }
 
 #[cfg(test)]
@@ -81,5 +90,34 @@ mod tests {
 
         assert!(!added);
         assert_eq!(folders.len(), 1);
+    }
+
+    #[test]
+    fn test_list_root_folders_empty() {
+        assert_eq!(resolve_stored_folders(None), Vec::<RootFolder>::new());
+    }
+
+    #[test]
+    fn test_list_root_folders_returns_stored() {
+        let stored = serde_json::json!([
+            { "path": "/logs/web74", "available": true },
+            { "path": "/logs/web84", "available": false }
+        ]);
+
+        let folders = resolve_stored_folders(Some(stored));
+
+        assert_eq!(
+            folders,
+            vec![
+                RootFolder {
+                    path: "/logs/web74".to_string(),
+                    available: true,
+                },
+                RootFolder {
+                    path: "/logs/web84".to_string(),
+                    available: false,
+                },
+            ]
+        );
     }
 }

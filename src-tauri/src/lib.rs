@@ -11,7 +11,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![greet, root_folders::add_root_folder])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            root_folders::add_root_folder,
+            root_folders::list_root_folders
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
