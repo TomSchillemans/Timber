@@ -1,19 +1,43 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
+import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
+
+const SIDEBAR_DEFAULT_WIDTH = 250;
 
 function App() {
   const [folders, setFolders] = useState<RootFolder[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const isResizing = useRef(false);
 
   useEffect(() => {
     invoke<RootFolder[]>("list_root_folders")
       .then(setFolders)
       .catch((e) => setError(String(e)));
   }, []);
+
+  const handleResizeMove = useCallback((event: MouseEvent) => {
+    if (!isResizing.current) {
+      return;
+    }
+    setSidebarWidth(clampSidebarWidth(event.clientX));
+  }, []);
+
+  const handleResizeEnd = useCallback(() => {
+    isResizing.current = false;
+    document.removeEventListener("mousemove", handleResizeMove);
+    document.removeEventListener("mouseup", handleResizeEnd);
+  }, [handleResizeMove]);
+
+  const handleResizeStart = useCallback(() => {
+    isResizing.current = true;
+    document.addEventListener("mousemove", handleResizeMove);
+    document.addEventListener("mouseup", handleResizeEnd);
+  }, [handleResizeMove, handleResizeEnd]);
 
   async function handleAddFolder() {
     const selected = await open({ directory: true, multiple: false });
@@ -33,7 +57,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: sidebarWidth }}>
         <div className="sidebar__brand">
           <span className="sidebar__brand-mark">::</span>
           TIMBER
@@ -45,6 +69,14 @@ function App() {
           onSelectFolder={setActiveFolder}
         />
       </aside>
+
+      <div
+        className="sidebar-resizer"
+        onMouseDown={handleResizeStart}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Sidebar breedte aanpassen"
+      />
 
       <main className="main-pane">
         {error && (

@@ -55,8 +55,7 @@ body {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 250px 1fr;
+  display: flex;
   height: 100vh;
   overflow: hidden;
 }
@@ -66,9 +65,22 @@ body {
 .sidebar {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   background-color: var(--panel);
-  border-right: 1px solid var(--border);
   overflow-y: auto;
+}
+
+.sidebar-resizer {
+  flex-shrink: 0;
+  width: 5px;
+  cursor: col-resize;
+  background-color: var(--border);
+  transition: background-color 0.15s ease;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background-color: var(--accent);
 }
 
 .sidebar__brand {
@@ -191,6 +203,8 @@ body {
 
 .main-pane {
   position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
