@@ -6,8 +6,10 @@
 #   just test     - Run frontend unit tests
 #   just build    - Build the frontend
 #
-# See 'just --list' for all available commands, including src-tauri/justfile
-# (run `just -f src-tauri/justfile` or `cd src-tauri && just` for Rust-only recipes).
+# See 'just --list' for all available commands, including the Rust
+# backend recipes nested under the `tauri` module (`just tauri::<recipe>`).
+
+mod tauri 'src-tauri/justfile'
 
 # Show available commands
 default:
@@ -25,25 +27,9 @@ dev:
 test PATH="src/**/*.test.tsx":
     npx vitest run {{PATH}}
 
-# Run backend (Rust) unit tests
-test-rust:
-    just -f src-tauri/justfile test
-
 # Run all tests (frontend + backend)
-test-full: test test-rust
+test-full: test tauri::test
 
 # Build the frontend for production
 build:
     npm run build
-
-# Build the Rust backend
-build-rust:
-    just -f src-tauri/justfile build
-
-# Lint the Rust backend (no frontend linter configured yet)
-lint:
-    just -f src-tauri/justfile lint
-
-# Format the Rust backend (no frontend formatter configured yet)
-format:
-    just -f src-tauri/justfile format
