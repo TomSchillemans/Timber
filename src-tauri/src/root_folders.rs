@@ -8,6 +8,8 @@ const FOLDERS_KEY: &str = "folders";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RootFolder {
     pub path: String,
+    // Altijd `true` bij toevoegen; Fase 3 herberekent dit bij het opvragen
+    // van de lijst om verplaatste/verwijderde root-folders te markeren.
     pub available: bool,
 }
 

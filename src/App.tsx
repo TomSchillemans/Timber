@@ -7,9 +7,12 @@ import "./App.css";
 function App() {
   const [folders, setFolders] = useState<RootFolder[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke<RootFolder[]>("list_root_folders").then(setFolders);
+    invoke<RootFolder[]>("list_root_folders")
+      .then(setFolders)
+      .catch((e) => setError(String(e)));
   }, []);
 
   async function handleAddFolder() {
@@ -17,10 +20,15 @@ function App() {
     if (typeof selected !== "string") {
       return;
     }
-    const updated = await invoke<RootFolder[]>("add_root_folder", {
-      path: selected,
-    });
-    setFolders(updated);
+    try {
+      const updated = await invoke<RootFolder[]>("add_root_folder", {
+        path: selected,
+      });
+      setFolders(updated);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   return (
@@ -32,6 +40,7 @@ function App() {
         onSelectFolder={setActiveFolder}
       />
       {activeFolder && <p>Actieve map: {activeFolder}</p>}
+      {error && <p role="alert">{error}</p>}
     </main>
   );
 }
