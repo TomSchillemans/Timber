@@ -8,13 +8,14 @@ const FOLDERS_KEY: &str = "folders";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RootFolder {
     pub path: String,
-    // Altijd `true` bij toevoegen; Fase 3 herberekent dit bij het opvragen
-    // van de lijst om verplaatste/verwijderde root-folders te markeren.
     pub available: bool,
 }
 
 /// Adds `path` to `folders` unless it is already present.
 /// Returns `true` if the folder was added, `false` if it was a duplicate.
+///
+/// Comparison is a plain string match, so it assumes `path` always arrives
+/// as the canonical string the OS folder dialog returned.
 fn insert_root_folder(folders: &mut Vec<RootFolder>, path: String) -> bool {
     if folders.iter().any(|f| f.path == path) {
         return false;
@@ -33,8 +34,12 @@ fn resolve_stored_folders(raw: Option<serde_json::Value>) -> Vec<RootFolder> {
         .unwrap_or_default()
 }
 
+fn stringify<E: std::fmt::Display>(e: E) -> String {
+    e.to_string()
+}
+
 fn load_folders<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<RootFolder>, String> {
-    let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
+    let store = app.store(STORE_FILE).map_err(stringify)?;
     Ok(resolve_stored_folders(store.get(FOLDERS_KEY)))
 }
 
@@ -42,13 +47,15 @@ fn save_folders<R: tauri::Runtime>(
     app: &AppHandle<R>,
     folders: &[RootFolder],
 ) -> Result<(), String> {
-    let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
-    let value = serde_json::to_value(folders).map_err(|e| e.to_string())?;
+    let store = app.store(STORE_FILE).map_err(stringify)?;
+    let value = serde_json::to_value(folders).map_err(stringify)?;
     store.set(FOLDERS_KEY, value);
-    store.save().map_err(|e| e.to_string())
+    store.save().map_err(stringify)
 }
 
-#[tauri::command]
+// Runs off the main thread (see `tauri::command(async)`): both commands do
+// blocking store I/O, and list_root_folders runs on every app startup.
+#[tauri::command(async)]
 pub fn add_root_folder(app: AppHandle, path: String) -> Result<Vec<RootFolder>, String> {
     let mut folders = load_folders(&app)?;
     insert_root_folder(&mut folders, path);
@@ -56,7 +63,7 @@ pub fn add_root_folder(app: AppHandle, path: String) -> Result<Vec<RootFolder>, 
     Ok(folders)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_root_folders(app: AppHandle) -> Result<Vec<RootFolder>, String> {
     load_folders(&app)
 }
