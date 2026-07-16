@@ -32,16 +32,45 @@ function App() {
   }
 
   return (
-    <main className="container">
-      <h1>Timber</h1>
-      <RootFolderList
-        folders={folders}
-        onAddFolder={handleAddFolder}
-        onSelectFolder={setActiveFolder}
-      />
-      {activeFolder && <p>Actieve map: {activeFolder}</p>}
-      {error && <p role="alert">{error}</p>}
-    </main>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar__brand">
+          <span className="sidebar__brand-mark">::</span>
+          TIMBER
+        </div>
+        <RootFolderList
+          folders={folders}
+          activeFolder={activeFolder}
+          onAddFolder={handleAddFolder}
+          onSelectFolder={setActiveFolder}
+        />
+      </aside>
+
+      <main className="main-pane">
+        {error && (
+          <p role="alert" className="alert">
+            {error}
+          </p>
+        )}
+
+        {activeFolder ? (
+          <div className="main-pane__active">
+            <span className="main-pane__eyebrow">Actieve map</span>
+            <code className="main-pane__path">{activeFolder}</code>
+            <p className="main-pane__hint">
+              Submap-navigatie en logweergave volgen in een latere fase.
+            </p>
+          </div>
+        ) : (
+          <div className="main-pane__empty">
+            <span className="main-pane__empty-glyph" aria-hidden="true">
+              ~/
+            </span>
+            <p>Selecteer een map om te beginnen.</p>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
