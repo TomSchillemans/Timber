@@ -353,3 +353,81 @@ body {
   color: var(--danger);
   font-size: 0.85em;
 }
+
+/* Log entry list */
+
+.log-entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.log-entry-list__empty {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  padding: 1em 2em;
+}
+
+.log-entry-list__item {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.log-entry-list__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8em;
+  width: 100%;
+  padding: 0.5em 0.8em;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.85em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.log-entry-list__row:hover {
+  background-color: var(--panel-raised);
+}
+
+.log-entry-list__timestamp {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+.log-entry-list__level {
+  flex-shrink: 0;
+  min-width: 3.5em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-size: 0.8em;
+}
+
+.log-entry-list__message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-entry-detail {
+  padding: 0.6em 0.8em 0.8em 2.2em;
+  background-color: var(--panel);
+}
+
+.log-entry-detail__json {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.8em;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-entry-detail__empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
