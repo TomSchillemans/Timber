@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
 import type { FolderNode } from "./components/FolderTree";
+import { LogEntryList, type LogEntry } from "./components/LogEntryList";
+import { DayFilterCalendar } from "./components/DayFilterCalendar";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -15,6 +17,10 @@ function App() {
   const [selectedLogFolder, setSelectedLogFolder] = useState<string | null>(
     null,
   );
+  const [logEntries, setLogEntries] = useState<LogEntry[] | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [isDayFilterOpen, setIsDayFilterOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -47,6 +53,85 @@ function App() {
       cancelled = true;
     };
   }, [activeFolder]);
+
+  useEffect(() => {
+    setIsDayFilterOpen(false);
+    if (!selectedLogFolder) {
+      setAvailableDates([]);
+      setSelectedDates([]);
+      return;
+    }
+    let cancelled = false;
+    invoke<string[]>("log_file_dates", { folder: selectedLogFolder })
+      .then((dates) => {
+        if (cancelled) {
+          return;
+        }
+        setAvailableDates(dates);
+        // Default to the most recent day only — loading every day by
+        // default is slow and noisy on daily-rotated logs; widening to
+        // more days is an explicit user action via the filter.
+        setSelectedDates(dates.length > 0 ? [dates[0]] : []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLogFolder]);
+
+  useEffect(() => {
+    if (!selectedLogFolder) {
+      setLogEntries(null);
+      return;
+    }
+    // No days selected while days exist: show nothing rather than
+    // silently falling back to "all days" (an empty filter list is
+    // treated by the backend as "no filter").
+    if (availableDates.length > 0 && selectedDates.length === 0) {
+      setLogEntries([]);
+      return;
+    }
+    let cancelled = false;
+    invoke<LogEntry[]>("log_parser", {
+      folder: selectedLogFolder,
+      dates: selectedDates,
+    })
+      .then((entries) => {
+        if (!cancelled) {
+          setLogEntries(entries);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLogFolder, selectedDates, availableDates.length]);
+
+  function dayFilterSummary(): string {
+    if (selectedDates.length === 0) {
+      return "Geen dagen geselecteerd";
+    }
+    if (selectedDates.length === 1) {
+      return selectedDates[0];
+    }
+    return `${selectedDates.length} dagen`;
+  }
+
+  function toggleDate(date: string) {
+    setSelectedDates((prev) =>
+      prev.includes(date)
+        ? prev.filter((d) => d !== date)
+        : [...prev, date],
+    );
+  }
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!isResizing.current) {
@@ -120,9 +205,31 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
-            <p className="main-pane__hint">
-              Logweergave volgt in een latere fase.
-            </p>
+            {availableDates.length > 0 && (
+              <div className="day-filter-toggle">
+                <button
+                  type="button"
+                  className="day-filter-toggle__button"
+                  aria-expanded={isDayFilterOpen}
+                  onClick={() => setIsDayFilterOpen((open) => !open)}
+                >
+                  <span aria-hidden="true">▤</span> {dayFilterSummary()}
+                </button>
+                {isDayFilterOpen && (
+                  <DayFilterCalendar
+                    availableDates={availableDates}
+                    selectedDates={selectedDates}
+                    onToggleDate={toggleDate}
+                    onSelectDates={setSelectedDates}
+                  />
+                )}
+              </div>
+            )}
+            {logEntries ? (
+              <LogEntryList key={selectedLogFolder} entries={logEntries} />
+            ) : (
+              <p className="main-pane__hint">Logs worden geladen...</p>
+            )}
           </div>
         ) : (
           <div className="main-pane__empty">

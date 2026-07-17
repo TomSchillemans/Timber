@@ -50,13 +50,23 @@ export function RootFolderList({
                     "folder-list__button" +
                     (isActive ? " folder-list__button--active" : "")
                   }
-                  onClick={() => onSelectFolder(folder.path)}
-                  title={folder.path}
+                  onClick={() => folder.available && onSelectFolder(folder.path)}
+                  disabled={!folder.available}
+                  title={
+                    folder.available
+                      ? folder.path
+                      : `${folder.path} (niet beschikbaar)`
+                  }
                 >
                   <span className="folder-list__name">
                     {folderName(folder.path)}
                   </span>
                   <span className="folder-list__path">{folder.path}</span>
+                  {!folder.available && (
+                    <span className="folder-list__badge">
+                      niet beschikbaar
+                    </span>
+                  )}
                 </button>
                 {isActive &&
                   (activeFolderTree ? (

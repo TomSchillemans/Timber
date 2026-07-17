@@ -176,6 +176,16 @@ body {
   border-color: var(--border);
 }
 
+.folder-list__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.folder-list__button:disabled:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 .folder-list__button--active {
   background-color: var(--panel-raised);
   border-color: var(--accent-dim);
@@ -203,6 +213,18 @@ body {
   margin: 0.3em 0 0 1.5em;
   color: var(--text-dim);
   font-size: 0.8em;
+}
+
+.folder-list__badge {
+  align-self: flex-start;
+  margin-top: 0.3em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--danger);
+  border-radius: 2px;
+  color: var(--danger);
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Main pane */
@@ -352,4 +374,244 @@ body {
   background-color: var(--danger-bg);
   color: var(--danger);
   font-size: 0.85em;
+}
+
+/* Day filter */
+
+.day-filter-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.day-filter-toggle__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  align-self: flex-start;
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.day-filter-toggle__button:hover {
+  border-color: var(--accent-dim);
+}
+
+.day-filter-toggle__button[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.day-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.day-filter__presets {
+  display: flex;
+  gap: 0.4em;
+}
+
+.day-filter__presets button {
+  padding: 0.25em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.75em;
+  cursor: pointer;
+}
+
+.day-filter__presets button:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.day-filter__calendar {
+  width: 15.5em;
+  padding: 0.6em;
+  border: 1px solid var(--border-soft);
+  border-radius: 2px;
+  background-color: var(--panel);
+}
+
+.day-filter__calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4em;
+  font-size: 0.8em;
+  color: var(--text);
+}
+
+.day-filter__calendar-header button {
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.day-filter__calendar-header button:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.day-filter__weekdays,
+.day-filter__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day-filter__weekdays span {
+  text-align: center;
+  font-size: 0.65em;
+  color: var(--text-dim);
+  padding-bottom: 0.2em;
+}
+
+.day-filter__day {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--border);
+  font-family: var(--mono);
+  font-size: 0.75em;
+  cursor: not-allowed;
+}
+
+.day-filter__day--outside {
+  color: var(--border-soft);
+}
+
+.day-filter__day--has-logs {
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.day-filter__day--has-logs:hover {
+  border-color: var(--border);
+  background-color: var(--panel-raised);
+}
+
+.day-filter__day--selected {
+  background-color: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* Log entry list */
+
+.log-entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.log-entry-list__empty {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  padding: 1em 2em;
+}
+
+.log-entry-list__item {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.log-entry-list__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3em 0.8em;
+  width: 100%;
+  padding: 0.5em 0.8em;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.85em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.log-entry-list__row:hover {
+  background-color: var(--panel-raised);
+}
+
+.log-entry-list__row--severe {
+  border-left-color: var(--danger);
+  background-color: var(--danger-bg);
+}
+
+.log-entry-list__row--severe:hover {
+  background-color: var(--danger-bg);
+  filter: brightness(1.15);
+}
+
+.log-entry-list__row--severe .log-entry-list__level {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.log-entry-list__timestamp {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+.log-entry-list__level {
+  flex-shrink: 0;
+  min-width: 3.5em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-size: 0.8em;
+}
+
+.log-entry-list__node {
+  flex-shrink: 0;
+  padding: 0 0.4em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-dim);
+  font-size: 0.75em;
+}
+
+.log-entry-list__message {
+  flex: 1 1 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-entry-detail {
+  padding: 0.6em 0.8em 0.8em 2.2em;
+  background-color: var(--panel);
+}
+
+.log-entry-detail__json {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.8em;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-entry-detail__empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8em;
 }

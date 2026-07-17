@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -38,6 +39,15 @@ fn stringify<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+/// Recomputes `available` for each folder based on whether its path still
+/// exists as a directory. Unavailable folders stay in the list (rather
+/// than being dropped) so the user can still see and manage them.
+fn recompute_availability(folders: &mut [RootFolder]) {
+    for folder in folders.iter_mut() {
+        folder.available = Path::new(&folder.path).is_dir();
+    }
+}
+
 fn load_folders<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<Vec<RootFolder>, String> {
     let store = app.store(STORE_FILE).map_err(stringify)?;
     Ok(resolve_stored_folders(store.get(FOLDERS_KEY)))
@@ -65,12 +75,15 @@ pub fn add_root_folder(app: AppHandle, path: String) -> Result<Vec<RootFolder>, 
 
 #[tauri::command(async)]
 pub fn list_root_folders(app: AppHandle) -> Result<Vec<RootFolder>, String> {
-    load_folders(&app)
+    let mut folders = load_folders(&app)?;
+    recompute_availability(&mut folders);
+    Ok(folders)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_add_root_folder_appends_to_store() {
@@ -128,5 +141,30 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_list_marks_missing_path_unavailable() {
+        let mut folders = vec![RootFolder {
+            path: "/this/path/does/not/exist".to_string(),
+            available: true,
+        }];
+
+        recompute_availability(&mut folders);
+
+        assert!(!folders[0].available);
+    }
+
+    #[test]
+    fn test_list_marks_existing_path_available() {
+        let root = tempdir().unwrap();
+        let mut folders = vec![RootFolder {
+            path: root.path().to_string_lossy().into_owned(),
+            available: false,
+        }];
+
+        recompute_availability(&mut folders);
+
+        assert!(folders[0].available);
     }
 }
