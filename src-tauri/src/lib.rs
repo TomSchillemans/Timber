@@ -92,6 +92,8 @@ pub fn run() {
             greet,
             root_folders::add_root_folder,
             root_folders::list_root_folders,
+            root_folders::remove_root_folder,
+            root_folders::rename_root_folder,
             folder_scanner::folder_scanner,
             log_parser::log_parser,
             log_parser::log_file_dates,
