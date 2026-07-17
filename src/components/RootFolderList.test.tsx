@@ -97,4 +97,109 @@ describe("RootFolderList", () => {
     expect(unavailableItem).toHaveTextContent(/niet beschikbaar/i);
     expect(availableItem).not.toHaveTextContent(/niet beschikbaar/i);
   });
+
+  it("removes a folder immediately on click, without a confirmation step", async () => {
+    const onRemoveFolder = vi.fn();
+    render(
+      <RootFolderList
+        folders={folders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onRemoveFolder={onRemoveFolder}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /web84 verwijderen/i }),
+    );
+
+    expect(onRemoveFolder).toHaveBeenCalledWith("/logs/web84");
+    expect(onRemoveFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a custom display name instead of the folder's own name when set", () => {
+    const namedFolders: RootFolder[] = [
+      { path: "/logs/web74", available: true, displayName: "Productie" },
+    ];
+    render(
+      <RootFolderList
+        folders={namedFolders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Productie")).toBeInTheDocument();
+    expect(screen.queryByText("web74")).not.toBeInTheDocument();
+  });
+
+  it("edits the display name inline and commits on Enter", async () => {
+    const onRenameFolder = vi.fn();
+    render(
+      <RootFolderList
+        folders={folders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onRenameFolder={onRenameFolder}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /web74 hernoemen/i }),
+    );
+    const input = screen.getByDisplayValue("web74");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Productie{Enter}");
+
+    expect(onRenameFolder).toHaveBeenCalledWith("/logs/web74", "Productie");
+  });
+
+  it("clears the display name when the rename field is emptied", async () => {
+    const onRenameFolder = vi.fn();
+    const namedFolders: RootFolder[] = [
+      { path: "/logs/web74", available: true, displayName: "Productie" },
+    ];
+    render(
+      <RootFolderList
+        folders={namedFolders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onRenameFolder={onRenameFolder}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /productie hernoemen/i }),
+    );
+    const input = screen.getByDisplayValue("Productie");
+    await userEvent.clear(input);
+    await userEvent.type(input, "{Enter}");
+
+    expect(onRenameFolder).toHaveBeenCalledWith("/logs/web74", null);
+  });
+
+  it("cancels the edit on Escape without committing the in-progress value", async () => {
+    const onRenameFolder = vi.fn();
+    render(
+      <RootFolderList
+        folders={folders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onRenameFolder={onRenameFolder}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /web74 hernoemen/i }),
+    );
+    const input = screen.getByDisplayValue("web74");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Onbedoelde naam{Escape}");
+
+    expect(onRenameFolder).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /web74 hernoemen/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Onbedoelde naam")).not.toBeInTheDocument();
+  });
 });

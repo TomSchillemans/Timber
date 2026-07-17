@@ -35,6 +35,8 @@ async function mockInvoke(overrides: Record<string, unknown> = {}) {
     log_parser: logEntries,
     log_file_dates: [],
     get_date_format_settings: DEFAULT_DATE_FORMAT_SETTINGS,
+    remove_root_folder: [],
+    rename_root_folder: folders,
     ...overrides,
   };
   const { invoke } = await import("@tauri-apps/api/core");
@@ -113,6 +115,42 @@ describe("App", () => {
     await userEvent.click(toggle);
     expect(
       await screen.findByRole("button", { name: "16" }),
+    ).toBeInTheDocument();
+  });
+
+  it("removing the active folder returns to the empty state", async () => {
+    await mockInvoke({ remove_root_folder: [] });
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    expect(await screen.findByText("database")).toBeInTheDocument();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /web74 verwijderen/i }),
+    );
+
+    expect(
+      await screen.findByText(/selecteer een map om te beginnen/i),
+    ).toBeInTheDocument();
+  });
+
+  it("removing the active folder while a log folder is selected also clears the log view", async () => {
+    await mockInvoke({ remove_root_folder: [] });
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    expect(await screen.findByText("database started")).toBeInTheDocument();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /web74 verwijderen/i }),
+    );
+
+    expect(screen.queryByText("database started")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/selecteer een map om te beginnen/i),
     ).toBeInTheDocument();
   });
 });

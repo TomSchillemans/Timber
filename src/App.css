@@ -153,11 +153,18 @@ body {
   font-size: 0.85em;
 }
 
+.folder-list__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.2em;
+}
+
 .folder-list__button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.5em 0.6em;
   border: 1px solid transparent;
   border-radius: 2px;
@@ -169,6 +176,39 @@ body {
   transition:
     background-color 0.12s ease,
     border-color 0.12s ease;
+}
+
+.folder-list__name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5em 0.6em;
+  border: 1px solid var(--accent-dim);
+  border-radius: 2px;
+  background-color: var(--panel-raised);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+.folder-list__name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.folder-list__action {
+  flex-shrink: 0;
+  width: 1.8em;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.folder-list__action:hover {
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .folder-list__button:hover {

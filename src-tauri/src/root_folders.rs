@@ -7,9 +7,17 @@ const STORE_FILE: &str = "root_folders.json";
 const FOLDERS_KEY: &str = "folders";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RootFolder {
     pub path: String,
     pub available: bool,
+    /// User-chosen label shown in the UI instead of the folder's actual
+    /// name — purely cosmetic, never renames anything on disk. `None` means
+    /// no custom name was set; the UI falls back to the folder's own name.
+    /// Not required to be unique: it's a label, not an identifier — `path`
+    /// remains the real key.
+    #[serde(default)]
+    pub display_name: Option<String>,
 }
 
 /// Adds `path` to `folders` unless it is already present.
@@ -24,7 +32,29 @@ fn insert_root_folder(folders: &mut Vec<RootFolder>, path: String) -> bool {
     folders.push(RootFolder {
         path,
         available: true,
+        display_name: None,
     });
+    true
+}
+
+/// Removes the folder matching `path`, if any. Returns `true` if a folder
+/// was removed, `false` if no entry matched.
+fn remove_root_folder_entry(folders: &mut Vec<RootFolder>, path: &str) -> bool {
+    let original_len = folders.len();
+    folders.retain(|f| f.path != path);
+    folders.len() != original_len
+}
+
+/// Sets (or clears, when `display_name` is `None`/empty) the display name
+/// for the folder matching `path`. Returns `true` if a matching folder was
+/// found, `false` otherwise.
+fn set_display_name(folders: &mut [RootFolder], path: &str, display_name: Option<String>) -> bool {
+    let Some(folder) = folders.iter_mut().find(|f| f.path == path) else {
+        return false;
+    };
+    folder.display_name = display_name
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty());
     true
 }
 
@@ -80,6 +110,26 @@ pub fn list_root_folders(app: AppHandle) -> Result<Vec<RootFolder>, String> {
     Ok(folders)
 }
 
+#[tauri::command(async)]
+pub fn remove_root_folder(app: AppHandle, path: String) -> Result<Vec<RootFolder>, String> {
+    let mut folders = load_folders(&app)?;
+    remove_root_folder_entry(&mut folders, &path);
+    save_folders(&app, &folders)?;
+    Ok(folders)
+}
+
+#[tauri::command(async)]
+pub fn rename_root_folder(
+    app: AppHandle,
+    path: String,
+    display_name: Option<String>,
+) -> Result<Vec<RootFolder>, String> {
+    let mut folders = load_folders(&app)?;
+    set_display_name(&mut folders, &path, display_name);
+    save_folders(&app, &folders)?;
+    Ok(folders)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,6 +147,7 @@ mod tests {
             vec![RootFolder {
                 path: "/logs/web74".to_string(),
                 available: true,
+                display_name: None,
             }]
         );
     }
@@ -106,6 +157,7 @@ mod tests {
         let mut folders = vec![RootFolder {
             path: "/logs/web74".to_string(),
             available: true,
+            display_name: None,
         }];
 
         let added = insert_root_folder(&mut folders, "/logs/web74".to_string());
@@ -134,10 +186,12 @@ mod tests {
                 RootFolder {
                     path: "/logs/web74".to_string(),
                     available: true,
+                    display_name: None,
                 },
                 RootFolder {
                     path: "/logs/web84".to_string(),
                     available: false,
+                    display_name: None,
                 },
             ]
         );
@@ -148,6 +202,7 @@ mod tests {
         let mut folders = vec![RootFolder {
             path: "/this/path/does/not/exist".to_string(),
             available: true,
+            display_name: None,
         }];
 
         recompute_availability(&mut folders);
@@ -161,10 +216,126 @@ mod tests {
         let mut folders = vec![RootFolder {
             path: root.path().to_string_lossy().into_owned(),
             available: false,
+            display_name: None,
         }];
 
         recompute_availability(&mut folders);
 
         assert!(folders[0].available);
+    }
+
+    #[test]
+    fn test_remove_root_folder_entry_removes_matching_path() {
+        let mut folders = vec![
+            RootFolder {
+                path: "/logs/web74".to_string(),
+                available: true,
+                display_name: None,
+            },
+            RootFolder {
+                path: "/logs/web84".to_string(),
+                available: true,
+                display_name: None,
+            },
+        ];
+
+        let removed = remove_root_folder_entry(&mut folders, "/logs/web74");
+
+        assert!(removed);
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].path, "/logs/web84");
+    }
+
+    #[test]
+    fn test_remove_root_folder_entry_no_match_is_a_no_op() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: None,
+        }];
+
+        let removed = remove_root_folder_entry(&mut folders, "/logs/does-not-exist");
+
+        assert!(!removed);
+        assert_eq!(folders.len(), 1);
+    }
+
+    #[test]
+    fn test_set_display_name_updates_matching_folder() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: None,
+        }];
+
+        let found = set_display_name(&mut folders, "/logs/web74", Some("Web74".to_string()));
+
+        assert!(found);
+        assert_eq!(folders[0].display_name, Some("Web74".to_string()));
+    }
+
+    #[test]
+    fn test_set_display_name_trims_surrounding_whitespace() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: None,
+        }];
+
+        set_display_name(&mut folders, "/logs/web74", Some("  Web74  ".to_string()));
+
+        assert_eq!(folders[0].display_name, Some("Web74".to_string()));
+    }
+
+    #[test]
+    fn test_set_display_name_clears_on_none() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: Some("Web74".to_string()),
+        }];
+
+        set_display_name(&mut folders, "/logs/web74", None);
+
+        assert_eq!(folders[0].display_name, None);
+    }
+
+    #[test]
+    fn test_set_display_name_clears_on_blank_string() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: Some("Web74".to_string()),
+        }];
+
+        set_display_name(&mut folders, "/logs/web74", Some("   ".to_string()));
+
+        assert_eq!(folders[0].display_name, None);
+    }
+
+    #[test]
+    fn test_set_display_name_no_match_returns_false() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: None,
+        }];
+
+        let found = set_display_name(
+            &mut folders,
+            "/logs/does-not-exist",
+            Some("Name".to_string()),
+        );
+
+        assert!(!found);
+    }
+
+    #[test]
+    fn test_resolve_stored_folders_defaults_missing_display_name_to_none() {
+        let stored = serde_json::json!([{ "path": "/logs/web74", "available": true }]);
+
+        let folders = resolve_stored_folders(Some(stored));
+
+        assert_eq!(folders[0].display_name, None);
     }
 }
