@@ -59,15 +59,47 @@ fn parse_log_file(path: &Path) -> Vec<LogEntry> {
         .collect()
 }
 
+/// Lists the direct (non-ignored) files in `dir`, skipping subdirectories —
+/// those are already represented as separate nodes in the folder tree.
+fn list_log_files(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            if crate::folder_scanner::is_ignored_file_name(&name.to_string_lossy()) {
+                continue;
+            }
+            files.push(entry.path());
+        }
+    }
+    files
+}
+
+/// Parses every log file directly inside `folder` (not recursively — a
+/// subfolder is its own separate selection in the tree) and concatenates
+/// their entries.
+fn parse_log_folder(folder: &Path) -> Vec<LogEntry> {
+    list_log_files(folder)
+        .iter()
+        .flat_map(|file| parse_log_file(file))
+        .collect()
+}
+
 #[tauri::command(async)]
-pub fn log_parser(path: String) -> Vec<LogEntry> {
-    parse_log_file(Path::new(&path))
+pub fn log_parser(folder: String) -> Vec<LogEntry> {
+    parse_log_folder(Path::new(&folder))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
+    use tempfile::{tempdir, NamedTempFile};
 
     fn write_log_file(contents: &str) -> NamedTempFile {
         let file = NamedTempFile::new().unwrap();
@@ -134,5 +166,55 @@ mod tests {
         assert_eq!(entries[0].extra_fields["request"]["path"], "/x");
         // Fields lifted into named struct fields aren't duplicated here.
         assert!(entries[0].extra_fields.get("message").is_none());
+    }
+
+    #[test]
+    fn test_parse_folder_aggregates_all_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a"), "{\"message\": \"from a\"}\n").unwrap();
+        fs::write(dir.path().join("b"), "{\"message\": \"from b\"}\n").unwrap();
+
+        let mut entries = parse_log_folder(dir.path());
+        entries.sort_by(|a, b| a.message.cmp(&b.message));
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].message, "from a");
+        assert_eq!(entries[1].message, "from b");
+    }
+
+    #[test]
+    fn test_parse_folder_ignores_os_junk_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join(".DS_Store"), b"not json").unwrap();
+        fs::write(dir.path().join("app"), "{\"message\": \"real\"}\n").unwrap();
+
+        let entries = parse_log_folder(dir.path());
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].message, "real");
+    }
+
+    #[test]
+    fn test_parse_folder_skips_subdirectories() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("nested")).unwrap();
+        fs::write(
+            dir.path().join("nested").join("app"),
+            "{\"message\": \"nested\"}\n",
+        )
+        .unwrap();
+
+        let entries = parse_log_folder(dir.path());
+
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_parse_empty_folder() {
+        let dir = tempdir().unwrap();
+
+        let entries = parse_log_folder(dir.path());
+
+        assert!(entries.is_empty());
     }
 }
