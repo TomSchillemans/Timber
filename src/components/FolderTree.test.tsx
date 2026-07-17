@@ -1,28 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { FolderTree, type FolderNode } from "./FolderTree";
+import { FolderTree } from "./FolderTree";
+import { makeFolderTree } from "../test/fixtures";
 
-const tree: FolderNode = {
-  path: "/logs/web74",
-  name: "web74",
-  hasLogFiles: false,
-  children: [
-    {
-      path: "/logs/web74/blocking",
-      name: "blocking",
-      hasLogFiles: false,
-      children: [
-        {
-          path: "/logs/web74/blocking/database",
-          name: "database",
-          hasLogFiles: true,
-          children: [],
-        },
-      ],
-    },
-  ],
-};
+const tree = makeFolderTree();
 
 describe("FolderTree", () => {
   it("renders the root and all descendants expanded by default", () => {

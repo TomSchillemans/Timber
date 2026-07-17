@@ -27,7 +27,7 @@ fn is_ignored_file_name(name: &str) -> bool {
 fn scan_directory(dir: &Path) -> FolderNode {
     let name = dir
         .file_name()
-        .map(|n| n.to_string_lossy().to_string())
+        .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
 
     let mut children = Vec::new();
@@ -40,7 +40,7 @@ fn scan_directory(dir: &Path) -> FolderNode {
             };
             if file_type.is_dir() {
                 children.push(scan_directory(&entry.path()));
-            } else if file_type.is_file() {
+            } else if file_type.is_file() && !has_log_files {
                 let entry_name = entry.file_name();
                 let entry_name = entry_name.to_string_lossy();
                 if !is_ignored_file_name(&entry_name) {
@@ -51,7 +51,7 @@ fn scan_directory(dir: &Path) -> FolderNode {
     }
 
     FolderNode {
-        path: dir.to_string_lossy().to_string(),
+        path: dir.to_string_lossy().into_owned(),
         name,
         has_log_files,
         children,
