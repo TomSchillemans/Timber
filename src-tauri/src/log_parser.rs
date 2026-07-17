@@ -143,7 +143,7 @@ fn extract_date_from_filename(name: &str) -> Option<String> {
 /// When `dates` is `Some`, only files whose name carries one of those dates
 /// are parsed — files with no parseable date are always included, since an
 /// unrecognized naming pattern should never silently hide log data.
-fn parse_log_folder(folder: &Path, dates: Option<&[String]>) -> Vec<LogEntry> {
+pub(crate) fn parse_log_folder(folder: &Path, dates: Option<&[String]>) -> Vec<LogEntry> {
     let files = list_log_files(folder);
     let filtered_files: Vec<_> = match dates {
         None => files,
