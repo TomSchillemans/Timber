@@ -1,0 +1,30 @@
+# Timber (src-tauri) - Rust/Tauri backend
+
+# Show available commands
+default:
+    @just --list
+
+# Format code
+format:
+    cargo fmt
+
+# Lint code
+lint:
+    cargo clippy -- -D warnings
+    cargo fmt -- --check
+
+# Run tests (optionally specify a test-name filter)
+test PATH="":
+    cargo test {{PATH}}
+
+# Build in debug mode
+build:
+    cargo build
+
+# Run the Tauri backend directly (without the frontend dev server)
+dev:
+    cargo run
+
+# Clean build artifacts
+clean:
+    cargo clean
