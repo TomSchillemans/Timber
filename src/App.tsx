@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
+import type { FolderNode } from "./components/FolderTree";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -10,6 +11,10 @@ const SIDEBAR_DEFAULT_WIDTH = 250;
 function App() {
   const [folders, setFolders] = useState<RootFolder[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [folderTree, setFolderTree] = useState<FolderNode | null>(null);
+  const [selectedLogFolder, setSelectedLogFolder] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -19,6 +24,29 @@ function App() {
       .then(setFolders)
       .catch((e) => setError(String(e)));
   }, []);
+
+  useEffect(() => {
+    if (!activeFolder) {
+      setFolderTree(null);
+      return;
+    }
+    let cancelled = false;
+    setSelectedLogFolder(null);
+    invoke<FolderNode>("folder_scanner", { root: activeFolder })
+      .then((tree) => {
+        if (!cancelled) {
+          setFolderTree(tree);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFolder]);
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!isResizing.current) {
@@ -65,8 +93,11 @@ function App() {
         <RootFolderList
           folders={folders}
           activeFolder={activeFolder}
+          activeFolderTree={folderTree}
+          selectedLogFolder={selectedLogFolder}
           onAddFolder={handleAddFolder}
           onSelectFolder={setActiveFolder}
+          onSelectLogFolder={setSelectedLogFolder}
         />
       </aside>
 
@@ -85,12 +116,12 @@ function App() {
           </p>
         )}
 
-        {activeFolder ? (
+        {selectedLogFolder ? (
           <div className="main-pane__active">
-            <span className="main-pane__eyebrow">Actieve map</span>
-            <code className="main-pane__path">{activeFolder}</code>
+            <span className="main-pane__eyebrow">Geselecteerde map</span>
+            <code className="main-pane__path">{selectedLogFolder}</code>
             <p className="main-pane__hint">
-              Submap-navigatie en logweergave volgen in een latere fase.
+              Logweergave volgt in een latere fase.
             </p>
           </div>
         ) : (
@@ -98,7 +129,11 @@ function App() {
             <span className="main-pane__empty-glyph" aria-hidden="true">
               ~/
             </span>
-            <p>Selecteer een map om te beginnen.</p>
+            <p>
+              {activeFolder
+                ? "Selecteer een submap met logs in de zijbalk."
+                : "Selecteer een map om te beginnen."}
+            </p>
           </div>
         )}
       </main>

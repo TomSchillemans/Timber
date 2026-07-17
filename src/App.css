@@ -199,6 +199,12 @@ body {
   max-width: 100%;
 }
 
+.folder-list__scanning {
+  margin: 0.3em 0 0 1.5em;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
+
 /* Main pane */
 
 .main-pane {
@@ -210,8 +216,7 @@ body {
   overflow-y: auto;
 }
 
-.main-pane__empty,
-.main-pane__active {
+.main-pane__empty {
   margin: auto;
   display: flex;
   flex-direction: column;
@@ -220,6 +225,14 @@ body {
   color: var(--text-dim);
   text-align: center;
   padding: 2em;
+}
+
+.main-pane__active {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6em;
+  padding: 1.5em 2em;
 }
 
 .main-pane__empty-glyph {
@@ -243,6 +256,92 @@ body {
   font-size: 0.85em;
   color: var(--text-dim);
   max-width: 32em;
+}
+
+/* Folder tree */
+
+.folder-tree,
+.folder-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.folder-tree__children {
+  padding-left: 1.1em;
+  border-left: 1px solid var(--border-soft);
+  margin-left: 0.4em;
+}
+
+.folder-tree--nested {
+  margin: 0.2em 0 0.3em 1.1em;
+}
+
+.folder-tree__node {
+  margin: 1px 0;
+}
+
+.folder-tree__label {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  width: 100%;
+  padding: 0.3em 0.5em;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.9em;
+  text-align: left;
+  cursor: default;
+}
+
+.folder-tree__label:hover {
+  background-color: var(--panel-raised);
+}
+
+.folder-tree__label--selectable {
+  color: var(--text);
+  cursor: pointer;
+}
+
+.folder-tree__label--selectable:hover {
+  border-color: var(--border);
+}
+
+.folder-tree__label--selected {
+  background-color: var(--panel-raised);
+  border-color: var(--accent-dim);
+}
+
+.folder-tree__label--selected .folder-tree__name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.folder-tree__icon {
+  color: var(--text-dim);
+  font-size: 0.75em;
+  width: 1em;
+  flex-shrink: 0;
+}
+
+.folder-tree__glyph {
+  font-size: 0.55em;
+  width: 0.8em;
+  flex-shrink: 0;
+  color: var(--border);
+}
+
+.folder-tree__label--selectable .folder-tree__glyph {
+  color: var(--accent);
+}
+
+.folder-tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert {
