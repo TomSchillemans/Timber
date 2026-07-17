@@ -20,6 +20,7 @@ function App() {
   const [logEntries, setLogEntries] = useState<LogEntry[] | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [isDayFilterOpen, setIsDayFilterOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -54,6 +55,7 @@ function App() {
   }, [activeFolder]);
 
   useEffect(() => {
+    setIsDayFilterOpen(false);
     if (!selectedLogFolder) {
       setAvailableDates([]);
       setSelectedDates([]);
@@ -112,6 +114,16 @@ function App() {
       cancelled = true;
     };
   }, [selectedLogFolder, selectedDates, availableDates.length]);
+
+  function dayFilterSummary(): string {
+    if (selectedDates.length === 0) {
+      return "Geen dagen geselecteerd";
+    }
+    if (selectedDates.length === 1) {
+      return selectedDates[0];
+    }
+    return `${selectedDates.length} dagen`;
+  }
 
   function toggleDate(date: string) {
     setSelectedDates((prev) =>
@@ -194,12 +206,24 @@ function App() {
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
             {availableDates.length > 0 && (
-              <DayFilterCalendar
-                availableDates={availableDates}
-                selectedDates={selectedDates}
-                onToggleDate={toggleDate}
-                onSelectDates={setSelectedDates}
-              />
+              <div className="day-filter-toggle">
+                <button
+                  type="button"
+                  className="day-filter-toggle__button"
+                  aria-expanded={isDayFilterOpen}
+                  onClick={() => setIsDayFilterOpen((open) => !open)}
+                >
+                  <span aria-hidden="true">▤</span> {dayFilterSummary()}
+                </button>
+                {isDayFilterOpen && (
+                  <DayFilterCalendar
+                    availableDates={availableDates}
+                    selectedDates={selectedDates}
+                    onToggleDate={toggleDate}
+                    onSelectDates={setSelectedDates}
+                  />
+                )}
+              </div>
             )}
             {logEntries ? (
               <LogEntryList key={selectedLogFolder} entries={logEntries} />

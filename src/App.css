@@ -378,6 +378,36 @@ body {
 
 /* Day filter */
 
+.day-filter-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.day-filter-toggle__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  align-self: flex-start;
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.day-filter-toggle__button:hover {
+  border-color: var(--accent-dim);
+}
+
+.day-filter-toggle__button[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .day-filter {
   display: flex;
   flex-direction: column;
