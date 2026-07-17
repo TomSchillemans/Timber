@@ -57,6 +57,11 @@ export function RootFolderList({
                     {folderName(folder.path)}
                   </span>
                   <span className="folder-list__path">{folder.path}</span>
+                  {!folder.available && (
+                    <span className="folder-list__badge">
+                      niet beschikbaar
+                    </span>
+                  )}
                 </button>
                 {isActive &&
                   (activeFolderTree ? (

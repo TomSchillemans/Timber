@@ -77,4 +77,24 @@ describe("RootFolderList", () => {
 
     expect(screen.getByText(/wordt gescand/i)).toBeInTheDocument();
   });
+
+  it("shows an unavailable badge for a folder whose path no longer exists", () => {
+    const mixedFolders: RootFolder[] = [
+      { path: "/logs/web74", available: true },
+      { path: "/logs/web84", available: false },
+    ];
+    render(
+      <RootFolderList
+        folders={mixedFolders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+      />,
+    );
+
+    const availableItem = screen.getByText("/logs/web74").closest("li");
+    const unavailableItem = screen.getByText("/logs/web84").closest("li");
+
+    expect(unavailableItem).toHaveTextContent(/niet beschikbaar/i);
+    expect(availableItem).not.toHaveTextContent(/niet beschikbaar/i);
+  });
 });
