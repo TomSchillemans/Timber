@@ -117,13 +117,50 @@ fn list_log_files(dir: &Path) -> Vec<std::path::PathBuf> {
     files
 }
 
+/// Extracts a trailing `YYYY-MM-DD` date from a daily-rotated log file name
+/// such as `elements--2026-07-16`. Returns `None` if the name has no such
+/// suffix — such files are undated and are always included regardless of
+/// any day filter, rather than silently dropped.
+fn extract_date_from_filename(name: &str) -> Option<String> {
+    let candidate = name.rsplit("--").next()?;
+    let bytes = candidate.as_bytes();
+    let is_digit = |b: u8| b.is_ascii_digit();
+    let valid = bytes.len() == 10
+        && bytes[0..4].iter().all(|&b| is_digit(b))
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(|&b| is_digit(b))
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(|&b| is_digit(b));
+    valid.then(|| candidate.to_string())
+}
+
 /// Parses every log file directly inside `folder` (not recursively — a
 /// subfolder is its own separate selection in the tree), concatenates their
 /// entries, and sorts by timestamp (entries without one sort first, in
 /// their original read order) so a multi-file folder reads chronologically
 /// rather than in filesystem-dependent read_dir order.
-fn parse_log_folder(folder: &Path) -> Vec<LogEntry> {
-    let mut entries: Vec<LogEntry> = list_log_files(folder)
+///
+/// When `dates` is `Some`, only files whose name carries one of those dates
+/// are parsed — files with no parseable date are always included, since an
+/// unrecognized naming pattern should never silently hide log data.
+fn parse_log_folder(folder: &Path, dates: Option<&[String]>) -> Vec<LogEntry> {
+    let files = list_log_files(folder);
+    let filtered_files: Vec<_> = match dates {
+        None => files,
+        Some([]) => files,
+        Some(dates) => files
+            .into_iter()
+            .filter(|file| {
+                let name = file.file_name().unwrap_or_default().to_string_lossy();
+                match extract_date_from_filename(&name) {
+                    Some(date) => dates.iter().any(|d| d == &date),
+                    None => true,
+                }
+            })
+            .collect(),
+    };
+
+    let mut entries: Vec<LogEntry> = filtered_files
         .iter()
         .flat_map(|file| parse_log_file(file))
         .collect();
@@ -132,8 +169,26 @@ fn parse_log_folder(folder: &Path) -> Vec<LogEntry> {
 }
 
 #[tauri::command(async)]
-pub fn log_parser(folder: String) -> Vec<LogEntry> {
-    parse_log_folder(Path::new(&folder))
+pub fn log_parser(folder: String, dates: Option<Vec<String>>) -> Vec<LogEntry> {
+    parse_log_folder(Path::new(&folder), dates.as_deref())
+}
+
+/// Lists the distinct dates found in daily-rotated log file names directly
+/// inside `folder`, most recent first. Files with no parseable date do not
+/// contribute a date but are still always shown by `log_parser`.
+#[tauri::command(async)]
+pub fn log_file_dates(folder: String) -> Vec<String> {
+    let mut dates: Vec<String> = list_log_files(Path::new(&folder))
+        .iter()
+        .filter_map(|file| {
+            let name = file.file_name()?.to_string_lossy().into_owned();
+            extract_date_from_filename(&name)
+        })
+        .collect();
+    dates.sort();
+    dates.dedup();
+    dates.reverse();
+    dates
 }
 
 #[cfg(test)]
@@ -215,7 +270,7 @@ mod tests {
         fs::write(dir.path().join("a"), "{\"message\": \"from a\"}\n").unwrap();
         fs::write(dir.path().join("b"), "{\"message\": \"from b\"}\n").unwrap();
 
-        let mut entries = parse_log_folder(dir.path());
+        let mut entries = parse_log_folder(dir.path(), None);
         entries.sort_by(|a, b| a.message.cmp(&b.message));
 
         assert_eq!(entries.len(), 2);
@@ -229,7 +284,7 @@ mod tests {
         fs::write(dir.path().join(".DS_Store"), b"not json").unwrap();
         fs::write(dir.path().join("app"), "{\"message\": \"real\"}\n").unwrap();
 
-        let entries = parse_log_folder(dir.path());
+        let entries = parse_log_folder(dir.path(), None);
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].message, "real");
@@ -245,7 +300,7 @@ mod tests {
         )
         .unwrap();
 
-        let entries = parse_log_folder(dir.path());
+        let entries = parse_log_folder(dir.path(), None);
 
         assert!(entries.is_empty());
     }
@@ -254,7 +309,7 @@ mod tests {
     fn test_parse_empty_folder() {
         let dir = tempdir().unwrap();
 
-        let entries = parse_log_folder(dir.path());
+        let entries = parse_log_folder(dir.path(), None);
 
         assert!(entries.is_empty());
     }
@@ -293,5 +348,65 @@ mod tests {
         // view even though databasenaam was also promoted to `node`.
         assert_eq!(entries[0].extra_fields["extra"]["databasenaam"], "web02");
         assert_eq!(entries[0].extra_fields["channel"], "Elements");
+    }
+
+    #[test]
+    fn test_extract_date_from_filename() {
+        assert_eq!(
+            extract_date_from_filename("elements--2026-07-16"),
+            Some("2026-07-16".to_string())
+        );
+        assert_eq!(extract_date_from_filename("elements"), None);
+        assert_eq!(extract_date_from_filename("elements--not-a-date"), None);
+    }
+
+    #[test]
+    fn test_log_file_dates_lists_distinct_dates_most_recent_first() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("elements--2026-07-14"), "").unwrap();
+        fs::write(dir.path().join("elements--2026-07-16"), "").unwrap();
+        fs::write(dir.path().join("errors--2026-07-16"), "").unwrap();
+        fs::write(dir.path().join("undated"), "").unwrap();
+
+        let dates = log_file_dates(dir.path().to_string_lossy().into_owned());
+
+        assert_eq!(dates, vec!["2026-07-16", "2026-07-14"]);
+    }
+
+    #[test]
+    fn test_parse_folder_filters_by_date() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("elements--2026-07-14"),
+            "{\"message\": \"day14\"}\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("elements--2026-07-16"),
+            "{\"message\": \"day16\"}\n",
+        )
+        .unwrap();
+
+        let entries = parse_log_folder(dir.path(), Some(&["2026-07-16".to_string()]));
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].message, "day16");
+    }
+
+    #[test]
+    fn test_parse_folder_date_filter_always_includes_undated_files() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("elements--2026-07-14"),
+            "{\"message\": \"day14\"}\n",
+        )
+        .unwrap();
+        fs::write(dir.path().join("undated"), "{\"message\": \"no date\"}\n").unwrap();
+
+        let mut entries = parse_log_folder(dir.path(), Some(&["2026-07-16".to_string()]));
+        entries.sort_by(|a, b| a.message.cmp(&b.message));
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].message, "no date");
     }
 }

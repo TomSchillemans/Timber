@@ -376,6 +376,31 @@ body {
   font-size: 0.85em;
 }
 
+/* Day filter */
+
+.day-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+
+.day-filter__option {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.25em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-dim);
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.day-filter__option:has(input:checked) {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
 /* Log entry list */
 
 .log-entry-list {

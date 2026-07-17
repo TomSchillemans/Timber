@@ -17,6 +17,8 @@ function App() {
     null,
   );
   const [logEntries, setLogEntries] = useState<LogEntry[] | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -52,11 +54,49 @@ function App() {
 
   useEffect(() => {
     if (!selectedLogFolder) {
-      setLogEntries(null);
+      setAvailableDates([]);
+      setSelectedDates([]);
       return;
     }
     let cancelled = false;
-    invoke<LogEntry[]>("log_parser", { folder: selectedLogFolder })
+    invoke<string[]>("log_file_dates", { folder: selectedLogFolder })
+      .then((dates) => {
+        if (cancelled) {
+          return;
+        }
+        setAvailableDates(dates);
+        // Default to the most recent day only — loading every day by
+        // default is slow and noisy on daily-rotated logs; widening to
+        // more days is an explicit user action via the filter.
+        setSelectedDates(dates.length > 0 ? [dates[0]] : []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLogFolder]);
+
+  useEffect(() => {
+    if (!selectedLogFolder) {
+      setLogEntries(null);
+      return;
+    }
+    // No days selected while days exist: show nothing rather than
+    // silently falling back to "all days" (an empty filter list is
+    // treated by the backend as "no filter").
+    if (availableDates.length > 0 && selectedDates.length === 0) {
+      setLogEntries([]);
+      return;
+    }
+    let cancelled = false;
+    invoke<LogEntry[]>("log_parser", {
+      folder: selectedLogFolder,
+      dates: selectedDates,
+    })
       .then((entries) => {
         if (!cancelled) {
           setLogEntries(entries);
@@ -70,7 +110,15 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLogFolder]);
+  }, [selectedLogFolder, selectedDates, availableDates.length]);
+
+  function toggleDate(date: string) {
+    setSelectedDates((prev) =>
+      prev.includes(date)
+        ? prev.filter((d) => d !== date)
+        : [...prev, date],
+    );
+  }
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!isResizing.current) {
@@ -144,6 +192,20 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
+            {availableDates.length > 0 && (
+              <div className="day-filter">
+                {availableDates.map((date) => (
+                  <label key={date} className="day-filter__option">
+                    <input
+                      type="checkbox"
+                      checked={selectedDates.includes(date)}
+                      onChange={() => toggleDate(date)}
+                    />
+                    {date}
+                  </label>
+                ))}
+              </div>
+            )}
             {logEntries ? (
               <LogEntryList key={selectedLogFolder} entries={logEntries} />
             ) : (
