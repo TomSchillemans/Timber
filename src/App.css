@@ -199,6 +199,12 @@ body {
   max-width: 100%;
 }
 
+.folder-list__scanning {
+  margin: 0.3em 0 0 1.5em;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
+
 /* Main pane */
 
 .main-pane {
@@ -265,6 +271,10 @@ body {
   padding-left: 1.1em;
   border-left: 1px solid var(--border-soft);
   margin-left: 0.4em;
+}
+
+.folder-tree--nested {
+  margin: 0.2em 0 0.3em 1.1em;
 }
 
 .folder-tree__node {
