@@ -11,9 +11,19 @@ pub struct FolderNode {
     pub children: Vec<FolderNode>,
 }
 
+/// OS-generated clutter that shows up in real directories but is never a
+/// log file — excluded so these don't falsely mark a folder as "has logs".
+const IGNORED_FILE_NAMES: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
+
+fn is_ignored_file_name(name: &str) -> bool {
+    IGNORED_FILE_NAMES.contains(&name)
+}
+
 /// Recursively scans `dir`, building a tree of subdirectories.
 /// A directory that can't be read (missing, no permission) is treated as
-/// empty rather than failing the whole scan.
+/// empty rather than failing the whole scan. Uses `DirEntry::file_type()`
+/// (which does not follow symlinks) rather than `Path::is_dir()`, so a
+/// symlink cycle can't send this into unbounded recursion.
 fn scan_directory(dir: &Path) -> FolderNode {
     let name = dir
         .file_name()
@@ -25,11 +35,17 @@ fn scan_directory(dir: &Path) -> FolderNode {
 
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                children.push(scan_directory(&path));
-            } else if path.is_file() {
-                has_log_files = true;
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                children.push(scan_directory(&entry.path()));
+            } else if file_type.is_file() {
+                let entry_name = entry.file_name();
+                let entry_name = entry_name.to_string_lossy();
+                if !is_ignored_file_name(&entry_name) {
+                    has_log_files = true;
+                }
             }
         }
     }
@@ -78,6 +94,36 @@ mod tests {
         assert!(database_node.has_log_files);
         assert!(!blocking_node.has_log_files);
         assert!(!web74_node.has_log_files);
+    }
+
+    #[test]
+    fn test_scan_ignores_os_junk_files() {
+        let root = tempdir().unwrap();
+        fs::write(root.path().join(".DS_Store"), b"").unwrap();
+
+        let tree = scan_directory(root.path());
+
+        assert!(!tree.has_log_files);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_scan_follows_no_symlink_cycle() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempdir().unwrap();
+        let child = root.path().join("child");
+        fs::create_dir(&child).unwrap();
+        // Symlink back to the parent — a real-world pattern (e.g. deploy
+        // dirs with a `current -> ..` link) that must not cause infinite
+        // recursion.
+        symlink(root.path(), child.join("back-to-root")).unwrap();
+
+        let tree = scan_directory(root.path());
+
+        let child_node = tree.children.iter().find(|n| n.name == "child").unwrap();
+        // The symlink is not treated as a subdirectory to recurse into.
+        assert!(child_node.children.is_empty());
     }
 
     #[test]
