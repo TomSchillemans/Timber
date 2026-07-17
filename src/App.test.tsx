@@ -14,6 +14,14 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 
 const folders: RootFolder[] = [{ path: "/logs/web74", available: true }];
 const tree = makeFolderTree();
+const logEntries = [
+  {
+    timestamp: "2026-07-17T10:00:00Z",
+    level: "info",
+    message: "database started",
+    extraFields: {},
+  },
+];
 
 describe("App", () => {
   beforeEach(async () => {
@@ -25,6 +33,9 @@ describe("App", () => {
       if (cmd === "folder_scanner") {
         return Promise.resolve(tree);
       }
+      if (cmd === "log_parser") {
+        return Promise.resolve(logEntries);
+      }
       return Promise.reject(new Error(`unexpected command: ${cmd}`));
     });
   });
@@ -35,5 +46,14 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("/logs/web74"));
 
     expect(await screen.findByText("database")).toBeInTheDocument();
+  });
+
+  it("parses and renders logs after selecting a folder with log files", async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    expect(await screen.findByText("database started")).toBeInTheDocument();
   });
 });

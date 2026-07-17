@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
 import type { FolderNode } from "./components/FolderTree";
+import { LogEntryList, type LogEntry } from "./components/LogEntryList";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -15,6 +16,7 @@ function App() {
   const [selectedLogFolder, setSelectedLogFolder] = useState<string | null>(
     null,
   );
+  const [logEntries, setLogEntries] = useState<LogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -47,6 +49,28 @@ function App() {
       cancelled = true;
     };
   }, [activeFolder]);
+
+  useEffect(() => {
+    if (!selectedLogFolder) {
+      setLogEntries(null);
+      return;
+    }
+    let cancelled = false;
+    invoke<LogEntry[]>("log_parser", { folder: selectedLogFolder })
+      .then((entries) => {
+        if (!cancelled) {
+          setLogEntries(entries);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLogFolder]);
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!isResizing.current) {
@@ -120,9 +144,11 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
-            <p className="main-pane__hint">
-              Logweergave volgt in een latere fase.
-            </p>
+            {logEntries ? (
+              <LogEntryList entries={logEntries} />
+            ) : (
+              <p className="main-pane__hint">Logs worden geladen...</p>
+            )}
           </div>
         ) : (
           <div className="main-pane__empty">
