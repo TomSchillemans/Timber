@@ -15,7 +15,7 @@ pub struct FolderNode {
 /// log file — excluded so these don't falsely mark a folder as "has logs".
 const IGNORED_FILE_NAMES: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
 
-fn is_ignored_file_name(name: &str) -> bool {
+pub(crate) fn is_ignored_file_name(name: &str) -> bool {
     IGNORED_FILE_NAMES.contains(&name)
 }
 
