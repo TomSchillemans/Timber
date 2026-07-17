@@ -163,13 +163,20 @@ function App() {
       invoke("stop_watching").catch(() => {});
       return;
     }
+    // No cleanup that calls `stop_watching` here: the backend's
+    // `WatcherState` holds at most one watcher and `watch_log_folder`
+    // already replaces it atomically. Pairing every folder/date switch
+    // with an explicit `stop_watching` call raced against the next
+    // `watch_log_folder` call (Tauri's async commands have no
+    // cross-invocation ordering guarantee), which could stop the new
+    // watcher instead of the old one and silently leave live-tailing off
+    // while the indicator kept showing "active". `stop_watching` is only
+    // needed when we're actually turning tailing off, which the early
+    // return above already covers.
     invoke("watch_log_folder", {
       folder: selectedLogFolder,
       dates: selectedDates,
     }).catch((e) => setError(String(e)));
-    return () => {
-      invoke("stop_watching").catch(() => {});
-    };
   }, [selectedLogFolder, isMostRecentDaySelected, selectedDates]);
 
   useEffect(() => {
