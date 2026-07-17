@@ -270,27 +270,64 @@ body {
 .folder-tree__label {
   display: flex;
   align-items: center;
-  gap: 0.4em;
+  gap: 0.45em;
   width: 100%;
-  padding: 0.25em 0.4em;
-  border: none;
+  padding: 0.3em 0.5em;
+  border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-dim);
   font-family: var(--mono);
   font-size: 0.9em;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 
 .folder-tree__label:hover {
   background-color: var(--panel-raised);
 }
 
-.folder-tree__chevron {
+.folder-tree__label--selectable {
+  color: var(--text);
+  cursor: pointer;
+}
+
+.folder-tree__label--selectable:hover {
+  border-color: var(--border);
+}
+
+.folder-tree__label--selected {
+  background-color: var(--panel-raised);
+  border-color: var(--accent-dim);
+}
+
+.folder-tree__label--selected .folder-tree__name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.folder-tree__icon {
   color: var(--text-dim);
   font-size: 0.75em;
   width: 1em;
+  flex-shrink: 0;
+}
+
+.folder-tree__glyph {
+  font-size: 0.55em;
+  width: 0.8em;
+  flex-shrink: 0;
+  color: var(--border);
+}
+
+.folder-tree__label--selectable .folder-tree__glyph {
+  color: var(--accent);
+}
+
+.folder-tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert {
