@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
-import { FolderTree, type FolderNode } from "./components/FolderTree";
+import type { FolderNode } from "./components/FolderTree";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -93,8 +93,11 @@ function App() {
         <RootFolderList
           folders={folders}
           activeFolder={activeFolder}
+          activeFolderTree={folderTree}
+          selectedLogFolder={selectedLogFolder}
           onAddFolder={handleAddFolder}
           onSelectFolder={setActiveFolder}
+          onSelectLogFolder={setSelectedLogFolder}
         />
       </aside>
 
@@ -113,34 +116,24 @@ function App() {
           </p>
         )}
 
-        {activeFolder ? (
+        {selectedLogFolder ? (
           <div className="main-pane__active">
-            <span className="main-pane__eyebrow">Actieve map</span>
-            <code className="main-pane__path">{activeFolder}</code>
-            {folderTree ? (
-              <ul className="folder-tree">
-                <FolderTree
-                  node={folderTree}
-                  selectedPath={selectedLogFolder}
-                  onSelectFolder={setSelectedLogFolder}
-                />
-              </ul>
-            ) : (
-              <p className="main-pane__hint">Map wordt gescand...</p>
-            )}
-            {selectedLogFolder && (
-              <p className="main-pane__hint">
-                Geselecteerd: <code>{selectedLogFolder}</code>. Logweergave
-                volgt in een latere fase.
-              </p>
-            )}
+            <span className="main-pane__eyebrow">Geselecteerde map</span>
+            <code className="main-pane__path">{selectedLogFolder}</code>
+            <p className="main-pane__hint">
+              Logweergave volgt in een latere fase.
+            </p>
           </div>
         ) : (
           <div className="main-pane__empty">
             <span className="main-pane__empty-glyph" aria-hidden="true">
               ~/
             </span>
-            <p>Selecteer een map om te beginnen.</p>
+            <p>
+              {activeFolder
+                ? "Selecteer een submap met logs in de zijbalk."
+                : "Selecteer een map om te beginnen."}
+            </p>
           </div>
         )}
       </main>
