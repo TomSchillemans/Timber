@@ -176,6 +176,16 @@ body {
   border-color: var(--border);
 }
 
+.folder-list__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.folder-list__button:disabled:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 .folder-list__button--active {
   background-color: var(--panel-raised);
   border-color: var(--accent-dim);

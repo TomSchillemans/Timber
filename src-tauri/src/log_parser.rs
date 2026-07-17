@@ -15,7 +15,10 @@ const TIMESTAMP_KEYS: &[&str] = &["timestamp", "time", "ts", "@timestamp"];
 const LEVEL_KEYS: &[&str] = &["level", "lvl", "severity"];
 const MESSAGE_KEYS: &[&str] = &["message", "msg"];
 
-fn take_string_field(value: &mut serde_json::Map<String, serde_json::Value>, keys: &[&str]) -> Option<String> {
+fn take_string_field(
+    value: &mut serde_json::Map<String, serde_json::Value>,
+    keys: &[&str],
+) -> Option<String> {
     for key in keys {
         if let Some(serde_json::Value::String(s)) = value.remove(*key) {
             return Some(s);
@@ -82,13 +85,17 @@ fn list_log_files(dir: &Path) -> Vec<std::path::PathBuf> {
 }
 
 /// Parses every log file directly inside `folder` (not recursively — a
-/// subfolder is its own separate selection in the tree) and concatenates
-/// their entries.
+/// subfolder is its own separate selection in the tree), concatenates their
+/// entries, and sorts by timestamp (entries without one sort first, in
+/// their original read order) so a multi-file folder reads chronologically
+/// rather than in filesystem-dependent read_dir order.
 fn parse_log_folder(folder: &Path) -> Vec<LogEntry> {
-    list_log_files(folder)
+    let mut entries: Vec<LogEntry> = list_log_files(folder)
         .iter()
         .flat_map(|file| parse_log_file(file))
-        .collect()
+        .collect();
+    entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    entries
 }
 
 #[tauri::command(async)]
@@ -122,9 +129,8 @@ mod tests {
 
     #[test]
     fn test_parse_skips_malformed_line() {
-        let file = write_log_file(
-            "{\"message\": \"first\"}\nnot json at all\n{\"message\": \"third\"}\n",
-        );
+        let file =
+            write_log_file("{\"message\": \"first\"}\nnot json at all\n{\"message\": \"third\"}\n");
 
         let entries = parse_log_file(file.path());
 
