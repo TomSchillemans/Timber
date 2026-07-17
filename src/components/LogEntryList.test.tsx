@@ -31,7 +31,7 @@ describe("LogEntryList", () => {
   it("renders timestamp, level and message for each entry", () => {
     render(<LogEntryList entries={entries} />);
 
-    expect(screen.getByText("2026-07-17T10:00:00Z")).toBeInTheDocument();
+    expect(screen.getByTitle("2026-07-17T10:00:00Z")).toBeInTheDocument();
     expect(screen.getByText("info")).toBeInTheDocument();
     expect(screen.getByText("started")).toBeInTheDocument();
   });

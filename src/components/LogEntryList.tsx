@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LogEntryDetail } from "./LogEntryDetail";
+import { formatTimestamp } from "../lib/formatTimestamp";
 
 export interface LogEntry {
   timestamp: string | null;
@@ -39,8 +40,11 @@ export function LogEntryList({ entries }: LogEntryListProps) {
               setExpandedIndex((prev) => (prev === index ? null : index))
             }
           >
-            <span className="log-entry-list__timestamp">
-              {entry.timestamp ?? "—"}
+            <span
+              className="log-entry-list__timestamp"
+              title={entry.timestamp ?? undefined}
+            >
+              {formatTimestamp(entry.timestamp)}
             </span>
             <span className="log-entry-list__level">
               {entry.level ?? "—"}
