@@ -200,6 +200,7 @@ function App() {
       setFolders(updated);
       if (activeFolder === path) {
         setActiveFolder(null);
+        setSelectedLogFolder(null);
       }
       setError(null);
     } catch (e) {

@@ -177,4 +177,29 @@ describe("RootFolderList", () => {
 
     expect(onRenameFolder).toHaveBeenCalledWith("/logs/web74", null);
   });
+
+  it("cancels the edit on Escape without committing the in-progress value", async () => {
+    const onRenameFolder = vi.fn();
+    render(
+      <RootFolderList
+        folders={folders}
+        onAddFolder={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onRenameFolder={onRenameFolder}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /web74 hernoemen/i }),
+    );
+    const input = screen.getByDisplayValue("web74");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Onbedoelde naam{Escape}");
+
+    expect(onRenameFolder).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /web74 hernoemen/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Onbedoelde naam")).not.toBeInTheDocument();
+  });
 });

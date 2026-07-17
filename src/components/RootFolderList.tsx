@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderTree, type FolderNode } from "./FolderTree";
 
 export interface RootFolder {
@@ -36,18 +36,37 @@ export function RootFolderList({
 }: RootFolderListProps) {
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  // Mirrors `editingPath`, but as a ref so the guards below always see the
+  // latest value even when read from a handler created in the same render
+  // (React state is a stable snapshot per render, so comparing against the
+  // `editingPath` *state* variable inside such a handler can never detect
+  // a commit/cancel that already happened moments earlier in that same
+  // render's closures). Needed because removing a focused input from the
+  // DOM (Enter/Escape swaps it back out for the button) can make the
+  // browser fire a trailing `blur`, which would otherwise re-run
+  // `commitEdit` a second time - or, worse, override an Escape-cancel with
+  // a stale commit.
+  const activeEditRef = useRef<string | null>(null);
 
   function startEditing(folder: RootFolder) {
+    activeEditRef.current = folder.path;
     setEditingPath(folder.path);
     setEditValue(folder.displayName ?? folderName(folder.path));
   }
 
-  function commitEdit(path: string) {
-    // Guards against a double commit: Enter fires this, then the input's
-    // unmount (once editingPath clears) can also trigger a blur event.
-    if (editingPath !== path) {
+  function cancelEdit(path: string) {
+    if (activeEditRef.current !== path) {
       return;
     }
+    activeEditRef.current = null;
+    setEditingPath(null);
+  }
+
+  function commitEdit(path: string) {
+    if (activeEditRef.current !== path) {
+      return;
+    }
+    activeEditRef.current = null;
     setEditingPath(null);
     onRenameFolder?.(path, editValue.trim() || null);
   }
@@ -83,7 +102,7 @@ export function RootFolderList({
                         if (e.key === "Enter") {
                           commitEdit(folder.path);
                         } else if (e.key === "Escape") {
-                          setEditingPath(null);
+                          cancelEdit(folder.path);
                         }
                       }}
                       onBlur={() => commitEdit(folder.path)}

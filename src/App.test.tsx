@@ -134,4 +134,23 @@ describe("App", () => {
       await screen.findByText(/selecteer een map om te beginnen/i),
     ).toBeInTheDocument();
   });
+
+  it("removing the active folder while a log folder is selected also clears the log view", async () => {
+    await mockInvoke({ remove_root_folder: [] });
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    expect(await screen.findByText("database started")).toBeInTheDocument();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /web74 verwijderen/i }),
+    );
+
+    expect(screen.queryByText("database started")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/selecteer een map om te beginnen/i),
+    ).toBeInTheDocument();
+  });
 });

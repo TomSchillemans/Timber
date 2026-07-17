@@ -52,7 +52,9 @@ fn set_display_name(folders: &mut [RootFolder], path: &str, display_name: Option
     let Some(folder) = folders.iter_mut().find(|f| f.path == path) else {
         return false;
     };
-    folder.display_name = display_name.filter(|name| !name.trim().is_empty());
+    folder.display_name = display_name
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty());
     true
 }
 
@@ -269,6 +271,19 @@ mod tests {
         let found = set_display_name(&mut folders, "/logs/web74", Some("Web74".to_string()));
 
         assert!(found);
+        assert_eq!(folders[0].display_name, Some("Web74".to_string()));
+    }
+
+    #[test]
+    fn test_set_display_name_trims_surrounding_whitespace() {
+        let mut folders = vec![RootFolder {
+            path: "/logs/web74".to_string(),
+            available: true,
+            display_name: None,
+        }];
+
+        set_display_name(&mut folders, "/logs/web74", Some("  Web74  ".to_string()));
+
         assert_eq!(folders[0].display_name, Some("Web74".to_string()));
     }
 
