@@ -1,50 +1,108 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { RootFolderList, type RootFolder } from "./components/RootFolderList";
+import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const SIDEBAR_DEFAULT_WIDTH = 250;
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+function App() {
+  const [folders, setFolders] = useState<RootFolder[]>([]);
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const isResizing = useRef(false);
+
+  useEffect(() => {
+    invoke<RootFolder[]>("list_root_folders")
+      .then(setFolders)
+      .catch((e) => setError(String(e)));
+  }, []);
+
+  const handleResizeMove = useCallback((event: MouseEvent) => {
+    if (!isResizing.current) {
+      return;
+    }
+    setSidebarWidth(clampSidebarWidth(event.clientX));
+  }, []);
+
+  const handleResizeEnd = useCallback(() => {
+    isResizing.current = false;
+    document.removeEventListener("mousemove", handleResizeMove);
+    document.removeEventListener("mouseup", handleResizeEnd);
+  }, [handleResizeMove]);
+
+  const handleResizeStart = useCallback(() => {
+    isResizing.current = true;
+    document.addEventListener("mousemove", handleResizeMove);
+    document.addEventListener("mouseup", handleResizeEnd);
+  }, [handleResizeMove, handleResizeEnd]);
+
+  async function handleAddFolder() {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected !== "string") {
+      return;
+    }
+    try {
+      const updated = await invoke<RootFolder[]>("add_root_folder", {
+        path: selected,
+      });
+      setFolders(updated);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+    <div className="app-shell">
+      <aside className="sidebar" style={{ width: sidebarWidth }}>
+        <div className="sidebar__brand">
+          <span className="sidebar__brand-mark">::</span>
+          TIMBER
+        </div>
+        <RootFolderList
+          folders={folders}
+          activeFolder={activeFolder}
+          onAddFolder={handleAddFolder}
+          onSelectFolder={setActiveFolder}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      </aside>
+
+      <div
+        className="sidebar-resizer"
+        onMouseDown={handleResizeStart}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Sidebar breedte aanpassen"
+      />
+
+      <main className="main-pane">
+        {error && (
+          <p role="alert" className="alert">
+            {error}
+          </p>
+        )}
+
+        {activeFolder ? (
+          <div className="main-pane__active">
+            <span className="main-pane__eyebrow">Actieve map</span>
+            <code className="main-pane__path">{activeFolder}</code>
+            <p className="main-pane__hint">
+              Submap-navigatie en logweergave volgen in een latere fase.
+            </p>
+          </div>
+        ) : (
+          <div className="main-pane__empty">
+            <span className="main-pane__empty-glyph" aria-hidden="true">
+              ~/
+            </span>
+            <p>Selecteer een map om te beginnen.</p>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 

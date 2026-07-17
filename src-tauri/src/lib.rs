@@ -1,3 +1,5 @@
+mod root_folders;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -8,7 +10,23 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            root_folders::add_root_folder,
+            root_folders::list_root_folders
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_store_plugin_registered() {
+        // A store-plugin Builder must construct and build without panicking,
+        // matching how `run()` registers it on the Tauri app builder.
+        let _plugin = tauri_plugin_store::Builder::default().build::<tauri::Wry>();
+    }
 }
