@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LogEntryDetail } from "./LogEntryDetail";
 import { formatTimestamp } from "../lib/formatTimestamp";
+import type { DateFormatSettings } from "../lib/dateFormatSettings";
 
 export interface LogEntry {
   timestamp: string | null;
@@ -12,6 +13,7 @@ export interface LogEntry {
 
 interface LogEntryListProps {
   entries: LogEntry[];
+  dateFormatSettings?: DateFormatSettings;
 }
 
 const SEVERE_LEVELS = ["error", "critical", "alert", "emergency"];
@@ -20,7 +22,10 @@ function isSevere(level: string | null): boolean {
   return level !== null && SEVERE_LEVELS.includes(level.toLowerCase());
 }
 
-export function LogEntryList({ entries }: LogEntryListProps) {
+export function LogEntryList({
+  entries,
+  dateFormatSettings,
+}: LogEntryListProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   if (entries.length === 0) {
@@ -44,7 +49,7 @@ export function LogEntryList({ entries }: LogEntryListProps) {
               className="log-entry-list__timestamp"
               title={entry.timestamp ?? undefined}
             >
-              {formatTimestamp(entry.timestamp)}
+              {formatTimestamp(entry.timestamp, dateFormatSettings)}
             </span>
             <span className="log-entry-list__level">
               {entry.level ?? "—"}

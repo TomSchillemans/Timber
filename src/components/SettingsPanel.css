@@ -1,0 +1,79 @@
+:root {
+  --bg: #0b0d0b;
+  --panel: #10130f;
+  --border: #262c20;
+  --text: #d9dccf;
+  --text-dim: #7c8272;
+  --accent: #e7a53c;
+
+  --mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  color: var(--text);
+  background-color: var(--bg);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9em;
+  padding: 1.2em 1.4em;
+}
+
+.settings__title {
+  margin: 0 0 0.2em;
+  font-size: 0.95em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.settings__radio,
+.settings__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.settings__custom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  padding: 0.8em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background-color: var(--panel);
+}
+
+.settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+
+.settings__field select {
+  padding: 0.3em;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: var(--mono);
+}
+
+.settings input[type="radio"],
+.settings input[type="checkbox"] {
+  accent-color: var(--accent);
+}

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
 import type { FolderNode } from "./components/FolderTree";
 import { LogEntryList, type LogEntry } from "./components/LogEntryList";
 import { DayFilterCalendar } from "./components/DayFilterCalendar";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
+import {
+  DATE_FORMAT_CHANGED_EVENT,
+  DEFAULT_DATE_FORMAT_SETTINGS,
+  type DateFormatSettings,
+} from "./lib/dateFormatSettings";
 import "./App.css";
 
 const SIDEBAR_DEFAULT_WIDTH = 250;
@@ -21,6 +27,8 @@ function App() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [isDayFilterOpen, setIsDayFilterOpen] = useState(false);
+  const [dateFormatSettings, setDateFormatSettings] =
+    useState<DateFormatSettings>(DEFAULT_DATE_FORMAT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -29,6 +37,22 @@ function App() {
     invoke<RootFolder[]>("list_root_folders")
       .then(setFolders)
       .catch((e) => setError(String(e)));
+  }, []);
+
+  useEffect(() => {
+    invoke<DateFormatSettings>("get_date_format_settings")
+      .then(setDateFormatSettings)
+      .catch((e) => setError(String(e)));
+
+    // The settings window emits this after every change so the main
+    // window's log view updates without needing a restart.
+    const unlisten = listen<DateFormatSettings>(
+      DATE_FORMAT_CHANGED_EVENT,
+      (event) => setDateFormatSettings(event.payload),
+    );
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, []);
 
   useEffect(() => {
@@ -226,7 +250,11 @@ function App() {
               </div>
             )}
             {logEntries ? (
-              <LogEntryList key={selectedLogFolder} entries={logEntries} />
+              <LogEntryList
+                key={selectedLogFolder}
+                entries={logEntries}
+                dateFormatSettings={dateFormatSettings}
+              />
             ) : (
               <p className="main-pane__hint">Logs worden geladen...</p>
             )}

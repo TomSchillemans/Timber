@@ -4,9 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type { RootFolder } from "./components/RootFolderList";
 import { makeFolderTree } from "./test/fixtures";
+import { DEFAULT_DATE_FORMAT_SETTINGS } from "./lib/dateFormatSettings";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
@@ -24,24 +28,27 @@ const logEntries = [
   },
 ];
 
+async function mockInvoke(overrides: Record<string, unknown> = {}) {
+  const responses: Record<string, unknown> = {
+    list_root_folders: folders,
+    folder_scanner: tree,
+    log_parser: logEntries,
+    log_file_dates: [],
+    get_date_format_settings: DEFAULT_DATE_FORMAT_SETTINGS,
+    ...overrides,
+  };
+  const { invoke } = await import("@tauri-apps/api/core");
+  vi.mocked(invoke).mockImplementation((command: string) => {
+    if (command in responses) {
+      return Promise.resolve(responses[command]);
+    }
+    return Promise.reject(new Error(`unexpected command: ${command}`));
+  });
+}
+
 describe("App", () => {
   beforeEach(async () => {
-    const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === "list_root_folders") {
-        return Promise.resolve(folders);
-      }
-      if (cmd === "folder_scanner") {
-        return Promise.resolve(tree);
-      }
-      if (cmd === "log_parser") {
-        return Promise.resolve(logEntries);
-      }
-      if (cmd === "log_file_dates") {
-        return Promise.resolve([]);
-      }
-      return Promise.reject(new Error(`unexpected command: ${cmd}`));
-    });
+    await mockInvoke();
   });
 
   it("scans and renders the tree after selecting a root folder", async () => {
@@ -62,22 +69,8 @@ describe("App", () => {
   });
 
   it("defaults the day filter to the most recent day and requests only that day", async () => {
+    await mockInvoke({ log_file_dates: ["2026-07-16", "2026-07-14"] });
     const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === "list_root_folders") {
-        return Promise.resolve(folders);
-      }
-      if (cmd === "folder_scanner") {
-        return Promise.resolve(tree);
-      }
-      if (cmd === "log_parser") {
-        return Promise.resolve(logEntries);
-      }
-      if (cmd === "log_file_dates") {
-        return Promise.resolve(["2026-07-16", "2026-07-14"]);
-      }
-      return Promise.reject(new Error(`unexpected command: ${cmd}`));
-    });
 
     render(<App />);
 
@@ -103,22 +96,7 @@ describe("App", () => {
   });
 
   it("keeps the day filter calendar collapsed until its toggle is clicked", async () => {
-    const { invoke } = await import("@tauri-apps/api/core");
-    vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === "list_root_folders") {
-        return Promise.resolve(folders);
-      }
-      if (cmd === "folder_scanner") {
-        return Promise.resolve(tree);
-      }
-      if (cmd === "log_parser") {
-        return Promise.resolve(logEntries);
-      }
-      if (cmd === "log_file_dates") {
-        return Promise.resolve(["2026-07-16", "2026-07-14"]);
-      }
-      return Promise.reject(new Error(`unexpected command: ${cmd}`));
-    });
+    await mockInvoke({ log_file_dates: ["2026-07-16", "2026-07-14"] });
 
     render(<App />);
 
@@ -128,9 +106,13 @@ describe("App", () => {
     const toggle = await screen.findByRole("button", {
       name: /2026-07-16/,
     });
-    expect(screen.queryByRole("button", { name: "16" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "16" }),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(toggle);
-    expect(await screen.findByRole("button", { name: "16" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "16" }),
+    ).toBeInTheDocument();
   });
 });
