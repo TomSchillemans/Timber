@@ -30,10 +30,22 @@ function App() {
       setFolderTree(null);
       return;
     }
+    let cancelled = false;
     setSelectedLogFolder(null);
     invoke<FolderNode>("folder_scanner", { root: activeFolder })
-      .then(setFolderTree)
-      .catch((e) => setError(String(e)));
+      .then((tree) => {
+        if (!cancelled) {
+          setFolderTree(tree);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeFolder]);
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
@@ -109,6 +121,7 @@ function App() {
               <ul className="folder-tree">
                 <FolderTree
                   node={folderTree}
+                  selectedPath={selectedLogFolder}
                   onSelectFolder={setSelectedLogFolder}
                 />
               </ul>
