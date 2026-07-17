@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
+import { FolderTree, type FolderNode } from "./components/FolderTree";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -10,6 +11,10 @@ const SIDEBAR_DEFAULT_WIDTH = 250;
 function App() {
   const [folders, setFolders] = useState<RootFolder[]>([]);
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [folderTree, setFolderTree] = useState<FolderNode | null>(null);
+  const [selectedLogFolder, setSelectedLogFolder] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
@@ -19,6 +24,17 @@ function App() {
       .then(setFolders)
       .catch((e) => setError(String(e)));
   }, []);
+
+  useEffect(() => {
+    if (!activeFolder) {
+      setFolderTree(null);
+      return;
+    }
+    setSelectedLogFolder(null);
+    invoke<FolderNode>("folder_scanner", { root: activeFolder })
+      .then(setFolderTree)
+      .catch((e) => setError(String(e)));
+  }, [activeFolder]);
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
     if (!isResizing.current) {
@@ -89,9 +105,22 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Actieve map</span>
             <code className="main-pane__path">{activeFolder}</code>
-            <p className="main-pane__hint">
-              Submap-navigatie en logweergave volgen in een latere fase.
-            </p>
+            {folderTree ? (
+              <ul className="folder-tree">
+                <FolderTree
+                  node={folderTree}
+                  onSelectFolder={setSelectedLogFolder}
+                />
+              </ul>
+            ) : (
+              <p className="main-pane__hint">Map wordt gescand...</p>
+            )}
+            {selectedLogFolder && (
+              <p className="main-pane__hint">
+                Geselecteerd: <code>{selectedLogFolder}</code>. Logweergave
+                volgt in een latere fase.
+              </p>
+            )}
           </div>
         ) : (
           <div className="main-pane__empty">
