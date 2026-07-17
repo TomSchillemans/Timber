@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { FolderTree, type FolderNode } from "./FolderTree";
 
 export interface RootFolder {
   path: string;
   available: boolean;
+  displayName?: string | null;
 }
 
 interface RootFolderListProps {
@@ -13,6 +15,8 @@ interface RootFolderListProps {
   onAddFolder: () => void;
   onSelectFolder: (path: string) => void;
   onSelectLogFolder?: (path: string) => void;
+  onRemoveFolder?: (path: string) => void;
+  onRenameFolder?: (path: string, displayName: string | null) => void;
 }
 
 function folderName(path: string): string {
@@ -27,7 +31,27 @@ export function RootFolderList({
   onAddFolder,
   onSelectFolder,
   onSelectLogFolder,
+  onRemoveFolder,
+  onRenameFolder,
 }: RootFolderListProps) {
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  function startEditing(folder: RootFolder) {
+    setEditingPath(folder.path);
+    setEditValue(folder.displayName ?? folderName(folder.path));
+  }
+
+  function commitEdit(path: string) {
+    // Guards against a double commit: Enter fires this, then the input's
+    // unmount (once editingPath clears) can also trigger a blur event.
+    if (editingPath !== path) {
+      return;
+    }
+    setEditingPath(null);
+    onRenameFolder?.(path, editValue.trim() || null);
+  }
+
   return (
     <div className="folder-panel">
       <button className="add-folder-btn" onClick={onAddFolder}>
@@ -43,31 +67,73 @@ export function RootFolderList({
         <ul className="folder-list">
           {folders.map((folder) => {
             const isActive = folder.path === activeFolder;
+            const label = folder.displayName ?? folderName(folder.path);
+            const isEditing = editingPath === folder.path;
+
             return (
               <li key={folder.path} className="folder-list__item">
-                <button
-                  className={
-                    "folder-list__button" +
-                    (isActive ? " folder-list__button--active" : "")
-                  }
-                  onClick={() => folder.available && onSelectFolder(folder.path)}
-                  disabled={!folder.available}
-                  title={
-                    folder.available
-                      ? folder.path
-                      : `${folder.path} (niet beschikbaar)`
-                  }
-                >
-                  <span className="folder-list__name">
-                    {folderName(folder.path)}
-                  </span>
-                  <span className="folder-list__path">{folder.path}</span>
-                  {!folder.available && (
-                    <span className="folder-list__badge">
-                      niet beschikbaar
-                    </span>
+                <div className="folder-list__row">
+                  {isEditing ? (
+                    <input
+                      className="folder-list__name-input"
+                      value={editValue}
+                      autoFocus
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          commitEdit(folder.path);
+                        } else if (e.key === "Escape") {
+                          setEditingPath(null);
+                        }
+                      }}
+                      onBlur={() => commitEdit(folder.path)}
+                    />
+                  ) : (
+                    <button
+                      className={
+                        "folder-list__button" +
+                        (isActive ? " folder-list__button--active" : "")
+                      }
+                      onClick={() =>
+                        folder.available && onSelectFolder(folder.path)
+                      }
+                      disabled={!folder.available}
+                      title={
+                        folder.available
+                          ? folder.path
+                          : `${folder.path} (niet beschikbaar)`
+                      }
+                    >
+                      <span className="folder-list__name">{label}</span>
+                      <span className="folder-list__path">{folder.path}</span>
+                      {!folder.available && (
+                        <span className="folder-list__badge">
+                          niet beschikbaar
+                        </span>
+                      )}
+                    </button>
                   )}
-                </button>
+                  {onRenameFolder && !isEditing && (
+                    <button
+                      type="button"
+                      className="folder-list__action"
+                      aria-label={`${label} hernoemen`}
+                      onClick={() => startEditing(folder)}
+                    >
+                      ✎
+                    </button>
+                  )}
+                  {onRemoveFolder && (
+                    <button
+                      type="button"
+                      className="folder-list__action"
+                      aria-label={`${label} verwijderen`}
+                      onClick={() => onRemoveFolder(folder.path)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 {isActive &&
                   (activeFolderTree ? (
                     activeFolderTree.children.length > 0 && (

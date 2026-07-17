@@ -192,6 +192,34 @@ function App() {
     }
   }
 
+  async function handleRemoveFolder(path: string) {
+    try {
+      const updated = await invoke<RootFolder[]>("remove_root_folder", {
+        path,
+      });
+      setFolders(updated);
+      if (activeFolder === path) {
+        setActiveFolder(null);
+      }
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleRenameFolder(path: string, displayName: string | null) {
+    try {
+      const updated = await invoke<RootFolder[]>("rename_root_folder", {
+        path,
+        displayName,
+      });
+      setFolders(updated);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar" style={{ width: sidebarWidth }}>
@@ -207,6 +235,8 @@ function App() {
           onAddFolder={handleAddFolder}
           onSelectFolder={setActiveFolder}
           onSelectLogFolder={setSelectedLogFolder}
+          onRemoveFolder={handleRemoveFolder}
+          onRenameFolder={handleRenameFolder}
         />
       </aside>
 
