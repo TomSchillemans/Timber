@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
 import type { FolderNode } from "./components/FolderTree";
 import { LogEntryList, type LogEntry } from "./components/LogEntryList";
+import { DayFilterCalendar } from "./components/DayFilterCalendar";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
 import "./App.css";
 
@@ -193,18 +194,12 @@ function App() {
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
             {availableDates.length > 0 && (
-              <div className="day-filter">
-                {availableDates.map((date) => (
-                  <label key={date} className="day-filter__option">
-                    <input
-                      type="checkbox"
-                      checked={selectedDates.includes(date)}
-                      onChange={() => toggleDate(date)}
-                    />
-                    {date}
-                  </label>
-                ))}
-              </div>
+              <DayFilterCalendar
+                availableDates={availableDates}
+                selectedDates={selectedDates}
+                onToggleDate={toggleDate}
+                onSelectDates={setSelectedDates}
+              />
             )}
             {logEntries ? (
               <LogEntryList key={selectedLogFolder} entries={logEntries} />

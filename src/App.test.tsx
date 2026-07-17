@@ -84,12 +84,13 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("/logs/web74"));
     await userEvent.click(await screen.findByText("database"));
 
-    const mostRecent = await screen.findByRole("checkbox", {
-      name: "2026-07-16",
+    const mostRecent = await screen.findByRole("button", {
+      name: "16",
+      pressed: true,
     });
-    const older = await screen.findByRole("checkbox", { name: "2026-07-14" });
-    expect(mostRecent).toBeChecked();
-    expect(older).not.toBeChecked();
+    const older = screen.getByRole("button", { name: "14", pressed: false });
+    expect(mostRecent).toBeInTheDocument();
+    expect(older).toBeInTheDocument();
 
     expect(invoke).toHaveBeenCalledWith("log_parser", {
       folder: expect.stringContaining("database"),
