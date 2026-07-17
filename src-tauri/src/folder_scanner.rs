@@ -97,6 +97,26 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
+    fn test_scan_permission_denied_dir_does_not_panic() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempdir().unwrap();
+        let locked = root.path().join("locked");
+        fs::create_dir(&locked).unwrap();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let tree = scan_directory(root.path());
+
+        // Restore permissions so the tempdir can clean itself up.
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let locked_node = tree.children.iter().find(|n| n.name == "locked").unwrap();
+        assert!(!locked_node.has_log_files);
+        assert!(locked_node.children.is_empty());
+    }
+
+    #[test]
     fn test_scan_ignores_os_junk_files() {
         let root = tempdir().unwrap();
         fs::write(root.path().join(".DS_Store"), b"").unwrap();
