@@ -145,7 +145,7 @@ function App() {
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
             {logEntries ? (
-              <LogEntryList entries={logEntries} />
+              <LogEntryList key={selectedLogFolder} entries={logEntries} />
             ) : (
               <p className="main-pane__hint">Logs worden geladen...</p>
             )}
