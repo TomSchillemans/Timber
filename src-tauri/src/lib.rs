@@ -1,3 +1,4 @@
+mod folder_scanner;
 mod root_folders;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -15,7 +16,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             root_folders::add_root_folder,
-            root_folders::list_root_folders
+            root_folders::list_root_folders,
+            folder_scanner::folder_scanner
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
