@@ -173,7 +173,7 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("starts watching the selected folder and shows the live-tail indicator", async () => {
+  it("does not watch automatically — live-tailing starts off until the toggle is clicked", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
 
     render(<App />);
@@ -181,16 +181,25 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("/logs/web74"));
     await userEvent.click(await screen.findByText("database"));
 
+    const toggle = await screen.findByRole("button", {
+      name: /live volgen/i,
+    });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(invoke).not.toHaveBeenCalledWith(
+      "watch_log_folder",
+      expect.anything(),
+    );
+
+    await userEvent.click(toggle);
+
     expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
       folder: expect.stringContaining("database"),
       dates: [],
     });
-    expect(
-      await screen.findByRole("status", { name: /live volgen actief/i }),
-    ).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("does not show the live-tail indicator when an older day is selected", async () => {
+  it("disables the toggle and turns tailing off when an older day is selected", async () => {
     await mockInvoke({ log_file_dates: ["2026-07-16", "2026-07-14"] });
     const { invoke } = await import("@tauri-apps/api/core");
 
@@ -198,9 +207,12 @@ describe("App", () => {
 
     await userEvent.click(await screen.findByText("/logs/web74"));
     await userEvent.click(await screen.findByText("database"));
-    expect(
-      await screen.findByRole("status", { name: /live volgen actief/i }),
-    ).toBeInTheDocument();
+
+    const toggle = await screen.findByRole("button", {
+      name: /live volgen/i,
+    });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
 
     await userEvent.click(
       await screen.findByRole("button", { name: /2026-07-16/ }),
@@ -208,10 +220,29 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "16" }));
     await userEvent.click(screen.getByRole("button", { name: "14" }));
 
-    expect(
-      screen.queryByRole("status", { name: /live volgen actief/i }),
-    ).not.toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toBeDisabled();
     expect(invoke).toHaveBeenCalledWith("stop_watching");
+  });
+
+  it("shows a live-tail dot next to the folder in the sidebar once enabled", async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    const databaseLabel = screen.getByText("database").closest("button");
+    expect(
+      databaseLabel?.querySelector(".live-tail-indicator--active"),
+    ).toBeNull();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /live volgen/i }),
+    );
+
+    expect(
+      databaseLabel?.querySelector(".live-tail-indicator--active"),
+    ).not.toBeNull();
   });
 
   it("updates the log view when a log-entries-updated event arrives for the current folder", async () => {

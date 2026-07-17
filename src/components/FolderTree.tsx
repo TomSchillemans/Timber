@@ -10,12 +10,14 @@ export interface FolderNode {
 interface FolderTreeProps {
   node: FolderNode;
   selectedPath?: string | null;
+  liveTailPath?: string | null;
   onSelectFolder: (path: string) => void;
 }
 
 export function FolderTree({
   node,
   selectedPath,
+  liveTailPath,
   onSelectFolder,
 }: FolderTreeProps) {
   const [expanded, setExpanded] = useState(true);
@@ -49,6 +51,12 @@ export function FolderTree({
           {node.hasLogFiles ? "●" : "○"}
         </span>
         <span className="folder-tree__name">{node.name}</span>
+        {node.path === liveTailPath && (
+          <span
+            className="live-tail-indicator live-tail-indicator--active"
+            aria-hidden="true"
+          />
+        )}
       </button>
       {expanded && hasChildren && (
         <ul className="folder-tree__children">
@@ -57,6 +65,7 @@ export function FolderTree({
               key={child.path}
               node={child}
               selectedPath={selectedPath}
+              liveTailPath={liveTailPath}
               onSelectFolder={onSelectFolder}
             />
           ))}

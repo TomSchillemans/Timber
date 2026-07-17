@@ -78,4 +78,24 @@ describe("FolderTree", () => {
       "folder-tree__label--selected",
     );
   });
+
+  it("shows the live-tail dot only next to the folder being tailed", () => {
+    render(
+      <FolderTree
+        node={tree}
+        liveTailPath="/logs/web74/blocking/database"
+        onSelectFolder={vi.fn()}
+      />,
+    );
+
+    const databaseButton = screen.getByText("database").closest("button");
+    const blockingButton = screen.getByText("blocking").closest("button");
+
+    expect(
+      databaseButton?.querySelector(".live-tail-indicator--active"),
+    ).not.toBeNull();
+    expect(
+      blockingButton?.querySelector(".live-tail-indicator--active"),
+    ).toBeNull();
+  });
 });

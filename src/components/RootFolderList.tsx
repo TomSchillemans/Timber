@@ -17,6 +17,7 @@ interface RootFolderListProps {
   onSelectLogFolder?: (path: string) => void;
   onRemoveFolder?: (path: string) => void;
   onRenameFolder?: (path: string, displayName: string | null) => void;
+  liveTailPath?: string | null;
 }
 
 function folderName(path: string): string {
@@ -33,6 +34,7 @@ export function RootFolderList({
   onSelectLogFolder,
   onRemoveFolder,
   onRenameFolder,
+  liveTailPath,
 }: RootFolderListProps) {
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -162,6 +164,7 @@ export function RootFolderList({
                             key={child.path}
                             node={child}
                             selectedPath={selectedLogFolder}
+                            liveTailPath={liveTailPath}
                             onSelectFolder={onSelectLogFolder ?? (() => {})}
                           />
                         ))}

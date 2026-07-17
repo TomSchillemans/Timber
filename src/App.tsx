@@ -36,6 +36,7 @@ function App() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [isDayFilterOpen, setIsDayFilterOpen] = useState(false);
+  const [isLiveTailEnabled, setIsLiveTailEnabled] = useState(false);
   const [dateFormatSettings, setDateFormatSettings] =
     useState<DateFormatSettings>(DEFAULT_DATE_FORMAT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +51,10 @@ function App() {
   const isMostRecentDaySelected =
     availableDates.length === 0 ||
     (selectedDates.length === 1 && selectedDates[0] === availableDates[0]);
-  const isLiveTailing = Boolean(selectedLogFolder) && isMostRecentDaySelected;
+  const isLiveTailing =
+    isLiveTailEnabled &&
+    Boolean(selectedLogFolder) &&
+    isMostRecentDaySelected;
 
   useEffect(() => {
     invoke<RootFolder[]>("list_root_folders")
@@ -99,6 +103,9 @@ function App() {
 
   useEffect(() => {
     setIsDayFilterOpen(false);
+    // Live-tailing is an explicit per-selection choice, not a default —
+    // selecting a (new) folder always starts with it off.
+    setIsLiveTailEnabled(false);
     if (!selectedLogFolder) {
       setAvailableDates([]);
       setSelectedDates([]);
@@ -159,7 +166,16 @@ function App() {
   }, [selectedLogFolder, selectedDates, availableDates.length]);
 
   useEffect(() => {
-    if (!selectedLogFolder || !isMostRecentDaySelected) {
+    // Turning the toggle off itself, rather than the day filter, so it
+    // doesn't silently re-enable if the user filters back to the most
+    // recent day later — re-enabling is always an explicit click.
+    if (isLiveTailEnabled && !isMostRecentDaySelected) {
+      setIsLiveTailEnabled(false);
+    }
+  }, [isMostRecentDaySelected, isLiveTailEnabled]);
+
+  useEffect(() => {
+    if (!isLiveTailing || !selectedLogFolder) {
       invoke("stop_watching").catch(() => {});
       return;
     }
@@ -177,7 +193,7 @@ function App() {
       folder: selectedLogFolder,
       dates: selectedDates,
     }).catch((e) => setError(String(e)));
-  }, [selectedLogFolder, isMostRecentDaySelected, selectedDates]);
+  }, [selectedLogFolder, isLiveTailing, selectedDates]);
 
   useEffect(() => {
     const unlisten = listen<LogEntriesUpdatedPayload>(
@@ -307,6 +323,7 @@ function App() {
           onSelectLogFolder={setSelectedLogFolder}
           onRemoveFolder={handleRemoveFolder}
           onRenameFolder={handleRenameFolder}
+          liveTailPath={isLiveTailing ? selectedLogFolder : null}
         />
       </aside>
 
@@ -333,14 +350,27 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
-            {isLiveTailing && (
+            <button
+              type="button"
+              className="live-tail-toggle"
+              aria-pressed={isLiveTailing}
+              disabled={!isMostRecentDaySelected}
+              title={
+                isMostRecentDaySelected
+                  ? "Live volgen aan/uit"
+                  : "Live volgen is alleen beschikbaar bij de meest recente dag"
+              }
+              onClick={() => setIsLiveTailEnabled((prev) => !prev)}
+            >
               <span
-                className="live-tail-indicator"
-                role="status"
-                aria-label="Live volgen actief"
-                title="Live volgen actief"
+                className={
+                  "live-tail-indicator" +
+                  (isLiveTailing ? " live-tail-indicator--active" : "")
+                }
+                aria-hidden="true"
               />
-            )}
+              Live volgen
+            </button>
             {availableDates.length > 0 && (
               <div className="day-filter-toggle">
                 <button
