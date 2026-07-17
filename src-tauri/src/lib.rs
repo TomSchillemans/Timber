@@ -19,7 +19,8 @@ pub fn run() {
             root_folders::add_root_folder,
             root_folders::list_root_folders,
             folder_scanner::folder_scanner,
-            log_parser::log_parser
+            log_parser::log_parser,
+            log_parser::log_file_dates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

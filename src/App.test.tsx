@@ -18,6 +18,7 @@ const logEntries = [
   {
     timestamp: "2026-07-17T10:00:00Z",
     level: "info",
+    node: null,
     message: "database started",
     extraFields: {},
   },
@@ -35,6 +36,9 @@ describe("App", () => {
       }
       if (cmd === "log_parser") {
         return Promise.resolve(logEntries);
+      }
+      if (cmd === "log_file_dates") {
+        return Promise.resolve([]);
       }
       return Promise.reject(new Error(`unexpected command: ${cmd}`));
     });
@@ -55,5 +59,41 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("database"));
 
     expect(await screen.findByText("database started")).toBeInTheDocument();
+  });
+
+  it("defaults the day filter to the most recent day and requests only that day", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "list_root_folders") {
+        return Promise.resolve(folders);
+      }
+      if (cmd === "folder_scanner") {
+        return Promise.resolve(tree);
+      }
+      if (cmd === "log_parser") {
+        return Promise.resolve(logEntries);
+      }
+      if (cmd === "log_file_dates") {
+        return Promise.resolve(["2026-07-16", "2026-07-14"]);
+      }
+      return Promise.reject(new Error(`unexpected command: ${cmd}`));
+    });
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    const mostRecent = await screen.findByRole("checkbox", {
+      name: "2026-07-16",
+    });
+    const older = await screen.findByRole("checkbox", { name: "2026-07-14" });
+    expect(mostRecent).toBeChecked();
+    expect(older).not.toBeChecked();
+
+    expect(invoke).toHaveBeenCalledWith("log_parser", {
+      folder: expect.stringContaining("database"),
+      dates: ["2026-07-16"],
+    });
   });
 });
