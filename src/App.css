@@ -398,10 +398,12 @@ body {
 .log-entry-list__row {
   display: flex;
   align-items: baseline;
-  gap: 0.8em;
+  flex-wrap: wrap;
+  gap: 0.3em 0.8em;
   width: 100%;
   padding: 0.5em 0.8em;
   border: none;
+  border-left: 3px solid transparent;
   background: transparent;
   color: var(--text);
   font-family: var(--mono);
@@ -412,6 +414,21 @@ body {
 
 .log-entry-list__row:hover {
   background-color: var(--panel-raised);
+}
+
+.log-entry-list__row--severe {
+  border-left-color: var(--danger);
+  background-color: var(--danger-bg);
+}
+
+.log-entry-list__row--severe:hover {
+  background-color: var(--danger-bg);
+  filter: brightness(1.15);
+}
+
+.log-entry-list__row--severe .log-entry-list__level {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .log-entry-list__timestamp {
@@ -428,10 +445,19 @@ body {
   font-size: 0.8em;
 }
 
+.log-entry-list__node {
+  flex-shrink: 0;
+  padding: 0 0.4em;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-dim);
+  font-size: 0.75em;
+}
+
 .log-entry-list__message {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .log-entry-detail {
