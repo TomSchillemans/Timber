@@ -314,6 +314,26 @@ body {
   color: var(--text);
 }
 
+.live-tail-indicator {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-left: 0.6em;
+  border-radius: 50%;
+  background-color: #3ecf6e;
+  animation: live-tail-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-tail-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(62, 207, 110, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(62, 207, 110, 0);
+  }
+}
+
 .main-pane__hint {
   font-size: 0.85em;
   color: var(--text-dim);

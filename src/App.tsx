@@ -15,6 +15,15 @@ import {
 import "./App.css";
 
 const SIDEBAR_DEFAULT_WIDTH = 250;
+const LOG_ENTRIES_UPDATED_EVENT = "log-entries-updated";
+// Treat the user as "at the bottom" within this margin, so a near-bottom
+// scroll position still keeps auto-scroll engaged.
+const AUTO_SCROLL_THRESHOLD_PX = 80;
+
+interface LogEntriesUpdatedPayload {
+  folder: string;
+  entries: LogEntry[];
+}
 
 function App() {
   const [folders, setFolders] = useState<RootFolder[]>([]);
@@ -32,6 +41,16 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const isResizing = useRef(false);
+  const mainPaneRef = useRef<HTMLElement>(null);
+  const isNearBottomRef = useRef(true);
+
+  // Live-tailing only makes sense while looking at the most recent day (or
+  // when the folder has no dated files at all) — new lines don't belong to
+  // an older day you've deliberately filtered to.
+  const isMostRecentDaySelected =
+    availableDates.length === 0 ||
+    (selectedDates.length === 1 && selectedDates[0] === availableDates[0]);
+  const isLiveTailing = Boolean(selectedLogFolder) && isMostRecentDaySelected;
 
   useEffect(() => {
     invoke<RootFolder[]>("list_root_folders")
@@ -138,6 +157,49 @@ function App() {
       cancelled = true;
     };
   }, [selectedLogFolder, selectedDates, availableDates.length]);
+
+  useEffect(() => {
+    if (!selectedLogFolder || !isMostRecentDaySelected) {
+      invoke("stop_watching").catch(() => {});
+      return;
+    }
+    invoke("watch_log_folder", {
+      folder: selectedLogFolder,
+      dates: selectedDates,
+    }).catch((e) => setError(String(e)));
+    return () => {
+      invoke("stop_watching").catch(() => {});
+    };
+  }, [selectedLogFolder, isMostRecentDaySelected, selectedDates]);
+
+  useEffect(() => {
+    const unlisten = listen<LogEntriesUpdatedPayload>(
+      LOG_ENTRIES_UPDATED_EVENT,
+      (event) => {
+        if (event.payload.folder === selectedLogFolder) {
+          setLogEntries(event.payload.entries);
+        }
+      },
+    );
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [selectedLogFolder]);
+
+  useEffect(() => {
+    if (isNearBottomRef.current && mainPaneRef.current) {
+      mainPaneRef.current.scrollTop = mainPaneRef.current.scrollHeight;
+    }
+  }, [logEntries]);
+
+  function handleMainPaneScroll() {
+    const el = mainPaneRef.current;
+    if (!el) {
+      return;
+    }
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < AUTO_SCROLL_THRESHOLD_PX;
+  }
 
   function dayFilterSummary(): string {
     if (selectedDates.length === 0) {
@@ -249,7 +311,11 @@ function App() {
         aria-label="Sidebar breedte aanpassen"
       />
 
-      <main className="main-pane">
+      <main
+        className="main-pane"
+        ref={mainPaneRef}
+        onScroll={handleMainPaneScroll}
+      >
         {error && (
           <p role="alert" className="alert">
             {error}
@@ -260,6 +326,14 @@ function App() {
           <div className="main-pane__active">
             <span className="main-pane__eyebrow">Geselecteerde map</span>
             <code className="main-pane__path">{selectedLogFolder}</code>
+            {isLiveTailing && (
+              <span
+                className="live-tail-indicator"
+                role="status"
+                aria-label="Live volgen actief"
+                title="Live volgen actief"
+              />
+            )}
             {availableDates.length > 0 && (
               <div className="day-filter-toggle">
                 <button

@@ -6,15 +6,31 @@ import type { RootFolder } from "./components/RootFolderList";
 import { makeFolderTree } from "./test/fixtures";
 import { DEFAULT_DATE_FORMAT_SETTINGS } from "./lib/dateFormatSettings";
 
+const { listenHandlers } = vi.hoisted(() => ({
+  listenHandlers: {} as Record<
+    string,
+    Array<(event: { payload: unknown }) => void>
+  >,
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(() => Promise.resolve(() => {})),
+  listen: vi.fn(
+    (event: string, handler: (event: { payload: unknown }) => void) => {
+      (listenHandlers[event] ??= []).push(handler);
+      return Promise.resolve(() => {});
+    },
+  ),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
 }));
+
+function emitTestEvent(event: string, payload: unknown) {
+  (listenHandlers[event] ?? []).forEach((handler) => handler({ payload }));
+}
 
 const folders: RootFolder[] = [{ path: "/logs/web74", available: true }];
 const tree = makeFolderTree();
@@ -37,6 +53,8 @@ async function mockInvoke(overrides: Record<string, unknown> = {}) {
     get_date_format_settings: DEFAULT_DATE_FORMAT_SETTINGS,
     remove_root_folder: [],
     rename_root_folder: folders,
+    watch_log_folder: undefined,
+    stop_watching: undefined,
     ...overrides,
   };
   const { invoke } = await import("@tauri-apps/api/core");
@@ -50,6 +68,7 @@ async function mockInvoke(overrides: Record<string, unknown> = {}) {
 
 describe("App", () => {
   beforeEach(async () => {
+    Object.keys(listenHandlers).forEach((key) => delete listenHandlers[key]);
     await mockInvoke();
   });
 
@@ -152,5 +171,93 @@ describe("App", () => {
     expect(
       await screen.findByText(/selecteer een map om te beginnen/i),
     ).toBeInTheDocument();
+  });
+
+  it("starts watching the selected folder and shows the live-tail indicator", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
+      folder: expect.stringContaining("database"),
+      dates: [],
+    });
+    expect(
+      await screen.findByRole("status", { name: /live volgen actief/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the live-tail indicator when an older day is selected", async () => {
+    await mockInvoke({ log_file_dates: ["2026-07-16", "2026-07-14"] });
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    expect(
+      await screen.findByRole("status", { name: /live volgen actief/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /2026-07-16/ }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "16" }));
+    await userEvent.click(screen.getByRole("button", { name: "14" }));
+
+    expect(
+      screen.queryByRole("status", { name: /live volgen actief/i }),
+    ).not.toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith("stop_watching");
+  });
+
+  it("updates the log view when a log-entries-updated event arrives for the current folder", async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    expect(await screen.findByText("database started")).toBeInTheDocument();
+
+    emitTestEvent("log-entries-updated", {
+      folder: "/logs/web74/blocking/database",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "info",
+          node: null,
+          message: "a new line arrived",
+          extraFields: {},
+        },
+      ],
+    });
+
+    expect(await screen.findByText("a new line arrived")).toBeInTheDocument();
+  });
+
+  it("ignores a log-entries-updated event for a different folder", async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    expect(await screen.findByText("database started")).toBeInTheDocument();
+
+    emitTestEvent("log-entries-updated", {
+      folder: "/logs/web74/blocking/errors",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "error",
+          node: null,
+          message: "should not appear",
+          extraFields: {},
+        },
+      ],
+    });
+
+    expect(screen.queryByText("should not appear")).not.toBeInTheDocument();
+    expect(screen.getByText("database started")).toBeInTheDocument();
   });
 });
