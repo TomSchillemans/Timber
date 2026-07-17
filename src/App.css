@@ -267,6 +267,10 @@ body {
   margin-left: 0.4em;
 }
 
+.folder-tree__node {
+  margin: 1px 0;
+}
+
 .folder-tree__label {
   display: flex;
   align-items: center;
