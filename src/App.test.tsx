@@ -183,6 +183,44 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("removing a root folder does not stop tailing a sibling whose name is a prefix (e.g. web7 vs web74)", async () => {
+    await mockInvoke({
+      list_root_folders: [
+        { path: "/logs/web7", available: true },
+        { path: "/logs/web74", available: true },
+      ],
+      remove_root_folder: [{ path: "/logs/web74", available: true }],
+    });
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^live volgen$/i }),
+    );
+    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
+      folder: expect.stringContaining("database"),
+      dates: [],
+    });
+
+    // Removing "/logs/web7" must not be treated as an ancestor of
+    // "/logs/web74/..." just because the path string "web7" is a prefix
+    // of "web74" — the folders are unrelated siblings.
+    await userEvent.click(
+      await screen.findByRole("button", { name: "web7 verwijderen" }),
+    );
+
+    const databaseRow = screen.getByText("database").closest("li");
+    expect(
+      databaseRow?.querySelector(".live-tail-indicator--active"),
+    ).not.toBeNull();
+    expect(invoke).not.toHaveBeenCalledWith("stop_watching", {
+      folder: expect.stringContaining("database"),
+    });
+  });
+
   it("does not watch automatically — live-tailing starts off until the toggle is clicked", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
 
