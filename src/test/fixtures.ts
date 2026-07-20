@@ -17,6 +17,12 @@ export function makeFolderTree(): FolderNode {
             hasLogFiles: true,
             children: [],
           },
+          {
+            path: "/logs/web74/blocking/errors",
+            name: "errors",
+            hasLogFiles: true,
+            children: [],
+          },
         ],
       },
     ],

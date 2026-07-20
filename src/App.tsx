@@ -2,11 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { RootFolderList, type RootFolder } from "./components/RootFolderList";
 import type { FolderNode } from "./components/FolderTree";
 import { LogEntryList, type LogEntry } from "./components/LogEntryList";
 import { DayFilterCalendar } from "./components/DayFilterCalendar";
+import { ToastStack, type Toast } from "./components/ToastStack";
 import { clampSidebarWidth } from "./lib/sidebarWidth";
+import { folderName } from "./lib/folderName";
 import {
   DATE_FORMAT_CHANGED_EVENT,
   DEFAULT_DATE_FORMAT_SETTINGS,
@@ -19,6 +26,10 @@ const LOG_ENTRIES_UPDATED_EVENT = "log-entries-updated";
 // Treat the user as "at the bottom" within this margin, so a near-bottom
 // scroll position still keeps auto-scroll engaged.
 const AUTO_SCROLL_THRESHOLD_PX = 80;
+// Avoid a burst of separate notifications when several new lines land in
+// the same background folder within a short window.
+const NOTIFICATION_COOLDOWN_MS = 30_000;
+const TOAST_AUTO_DISMISS_MS = 8_000;
 
 interface LogEntriesUpdatedPayload {
   folder: string;
@@ -36,7 +47,10 @@ function App() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [isDayFilterOpen, setIsDayFilterOpen] = useState(false);
-  const [isLiveTailEnabled, setIsLiveTailEnabled] = useState(false);
+  // Folders currently being tailed, independent of which one is open —
+  // switching to look at a different folder doesn't stop the others.
+  const [liveTailingPaths, setLiveTailingPaths] = useState<string[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [dateFormatSettings, setDateFormatSettings] =
     useState<DateFormatSettings>(DEFAULT_DATE_FORMAT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +58,10 @@ function App() {
   const isResizing = useRef(false);
   const mainPaneRef = useRef<HTMLElement>(null);
   const isNearBottomRef = useRef(true);
+  const lastNotifiedAtRef = useRef<Record<string, number>>({});
+  // Set by jumpToFolder when the target folder's root isn't active yet, so
+  // the folder_scanner effect can select it once that root's tree loads.
+  const pendingJumpPathRef = useRef<string | null>(null);
 
   // Live-tailing only makes sense while looking at the most recent day (or
   // when the folder has no dated files at all) — new lines don't belong to
@@ -52,8 +70,8 @@ function App() {
     availableDates.length === 0 ||
     (selectedDates.length === 1 && selectedDates[0] === availableDates[0]);
   const isLiveTailing =
-    isLiveTailEnabled &&
     Boolean(selectedLogFolder) &&
+    liveTailingPaths.includes(selectedLogFolder ?? "") &&
     isMostRecentDaySelected;
 
   useEffect(() => {
@@ -79,6 +97,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    isPermissionGranted().then((granted) => {
+      if (!granted) {
+        requestPermission().catch(() => {});
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (!activeFolder) {
       setFolderTree(null);
       return;
@@ -89,6 +115,10 @@ function App() {
       .then((tree) => {
         if (!cancelled) {
           setFolderTree(tree);
+          if (pendingJumpPathRef.current) {
+            setSelectedLogFolder(pendingJumpPathRef.current);
+            pendingJumpPathRef.current = null;
+          }
         }
       })
       .catch((e) => {
@@ -103,9 +133,6 @@ function App() {
 
   useEffect(() => {
     setIsDayFilterOpen(false);
-    // Live-tailing is an explicit per-selection choice, not a default —
-    // selecting a (new) folder always starts with it off.
-    setIsLiveTailEnabled(false);
     if (!selectedLogFolder) {
       setAvailableDates([]);
       setSelectedDates([]);
@@ -166,34 +193,20 @@ function App() {
   }, [selectedLogFolder, selectedDates, availableDates.length]);
 
   useEffect(() => {
-    // Turning the toggle off itself, rather than the day filter, so it
+    // Turning the tail off itself, rather than just the day filter, so it
     // doesn't silently re-enable if the user filters back to the most
     // recent day later — re-enabling is always an explicit click.
-    if (isLiveTailEnabled && !isMostRecentDaySelected) {
-      setIsLiveTailEnabled(false);
+    if (
+      selectedLogFolder &&
+      liveTailingPaths.includes(selectedLogFolder) &&
+      !isMostRecentDaySelected
+    ) {
+      setLiveTailingPaths((prev) =>
+        prev.filter((p) => p !== selectedLogFolder),
+      );
+      invoke("stop_watching", { folder: selectedLogFolder }).catch(() => {});
     }
-  }, [isMostRecentDaySelected, isLiveTailEnabled]);
-
-  useEffect(() => {
-    if (!isLiveTailing || !selectedLogFolder) {
-      invoke("stop_watching").catch(() => {});
-      return;
-    }
-    // No cleanup that calls `stop_watching` here: the backend's
-    // `WatcherState` holds at most one watcher and `watch_log_folder`
-    // already replaces it atomically. Pairing every folder/date switch
-    // with an explicit `stop_watching` call raced against the next
-    // `watch_log_folder` call (Tauri's async commands have no
-    // cross-invocation ordering guarantee), which could stop the new
-    // watcher instead of the old one and silently leave live-tailing off
-    // while the indicator kept showing "active". `stop_watching` is only
-    // needed when we're actually turning tailing off, which the early
-    // return above already covers.
-    invoke("watch_log_folder", {
-      folder: selectedLogFolder,
-      dates: selectedDates,
-    }).catch((e) => setError(String(e)));
-  }, [selectedLogFolder, isLiveTailing, selectedDates]);
+  }, [selectedLogFolder, isMostRecentDaySelected, liveTailingPaths]);
 
   useEffect(() => {
     const unlisten = listen<LogEntriesUpdatedPayload>(
@@ -201,13 +214,16 @@ function App() {
       (event) => {
         if (event.payload.folder === selectedLogFolder) {
           setLogEntries(event.payload.entries);
+        } else {
+          notifyBackgroundActivity(event.payload.folder);
         }
       },
     );
     return () => {
       unlisten.then((f) => f());
     };
-  }, [selectedLogFolder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLogFolder, folders]);
 
   useEffect(() => {
     if (isNearBottomRef.current && mainPaneRef.current) {
@@ -239,6 +255,84 @@ function App() {
       prev.includes(date)
         ? prev.filter((d) => d !== date)
         : [...prev, date],
+    );
+  }
+
+  function folderLabel(path: string): string {
+    const root = folders.find(
+      (f) => path === f.path || path.startsWith(`${f.path}/`),
+    );
+    const subLabel = folderName(path);
+    if (!root) {
+      return subLabel;
+    }
+    const rootLabel = root.displayName ?? folderName(root.path);
+    return rootLabel === subLabel ? subLabel : `${rootLabel} / ${subLabel}`;
+  }
+
+  function notifyBackgroundActivity(folder: string) {
+    const now = Date.now();
+    const last = lastNotifiedAtRef.current[folder] ?? 0;
+    if (now - last < NOTIFICATION_COOLDOWN_MS) {
+      return;
+    }
+    lastNotifiedAtRef.current[folder] = now;
+
+    const label = folderLabel(folder);
+    sendNotification({ title: "Nieuwe logactiviteit", body: label });
+
+    const id = `${folder}-${now}`;
+    setToasts((prev) => [...prev, { id, folder, label }]);
+    setTimeout(() => dismissToast(id), TOAST_AUTO_DISMISS_MS);
+  }
+
+  function dismissToast(id: string) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  function jumpToFolder(path: string) {
+    const root = folders.find(
+      (f) => path === f.path || path.startsWith(`${f.path}/`),
+    );
+    if (!root) {
+      return;
+    }
+    if (root.path === activeFolder) {
+      setSelectedLogFolder(path);
+    } else {
+      pendingJumpPathRef.current = path;
+      setActiveFolder(root.path);
+    }
+  }
+
+  async function toggleLiveTail(path: string) {
+    if (liveTailingPaths.includes(path)) {
+      setLiveTailingPaths((prev) => prev.filter((p) => p !== path));
+      invoke("stop_watching", { folder: path }).catch(() => {});
+      return;
+    }
+
+    let dates: string[];
+    if (path === selectedLogFolder) {
+      if (!isMostRecentDaySelected) {
+        return;
+      }
+      dates = selectedDates;
+    } else {
+      try {
+        const datesForPath = await invoke<string[]>("log_file_dates", {
+          folder: path,
+        });
+        dates = datesForPath.length > 0 ? [datesForPath[0]] : [];
+      } catch (e) {
+        setError(String(e));
+        return;
+      }
+    }
+
+    setLiveTailingPaths((prev) => [...prev, path]);
+    invoke("watch_log_folder", { folder: path, dates }).catch((e) =>
+      setError(String(e)),
     );
   }
 
@@ -283,6 +377,19 @@ function App() {
         path,
       });
       setFolders(updated);
+
+      const affectedTailedPaths = liveTailingPaths.filter(
+        (p) => p === path || p.startsWith(`${path}/`),
+      );
+      if (affectedTailedPaths.length > 0) {
+        setLiveTailingPaths((prev) =>
+          prev.filter((p) => !affectedTailedPaths.includes(p)),
+        );
+        affectedTailedPaths.forEach((p) => {
+          invoke("stop_watching", { folder: p }).catch(() => {});
+        });
+      }
+
       if (activeFolder === path) {
         setActiveFolder(null);
         setSelectedLogFolder(null);
@@ -323,7 +430,8 @@ function App() {
           onSelectLogFolder={setSelectedLogFolder}
           onRemoveFolder={handleRemoveFolder}
           onRenameFolder={handleRenameFolder}
-          liveTailPath={isLiveTailing ? selectedLogFolder : null}
+          liveTailingPaths={liveTailingPaths}
+          onToggleLiveTail={toggleLiveTail}
         />
       </aside>
 
@@ -360,7 +468,7 @@ function App() {
                   ? "Live volgen aan/uit"
                   : "Live volgen is alleen beschikbaar bij de meest recente dag"
               }
-              onClick={() => setIsLiveTailEnabled((prev) => !prev)}
+              onClick={() => toggleLiveTail(selectedLogFolder)}
             >
               <span
                 className={
@@ -414,6 +522,15 @@ function App() {
           </div>
         )}
       </main>
+
+      <ToastStack
+        toasts={toasts}
+        onJumpToFolder={(path) => {
+          jumpToFolder(path);
+          setToasts((prev) => prev.filter((t) => t.folder !== path));
+        }}
+        onDismiss={dismissToast}
+      />
     </div>
   );
 }

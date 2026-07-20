@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { FolderTree, type FolderNode } from "./FolderTree";
+import { folderName } from "../lib/folderName";
 
 export interface RootFolder {
   path: string;
@@ -17,11 +18,8 @@ interface RootFolderListProps {
   onSelectLogFolder?: (path: string) => void;
   onRemoveFolder?: (path: string) => void;
   onRenameFolder?: (path: string, displayName: string | null) => void;
-  liveTailPath?: string | null;
-}
-
-function folderName(path: string): string {
-  return path.split("/").filter(Boolean).pop() ?? path;
+  liveTailingPaths?: string[];
+  onToggleLiveTail?: (path: string) => void;
 }
 
 export function RootFolderList({
@@ -34,7 +32,8 @@ export function RootFolderList({
   onSelectLogFolder,
   onRemoveFolder,
   onRenameFolder,
-  liveTailPath,
+  liveTailingPaths,
+  onToggleLiveTail,
 }: RootFolderListProps) {
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -164,8 +163,9 @@ export function RootFolderList({
                             key={child.path}
                             node={child}
                             selectedPath={selectedLogFolder}
-                            liveTailPath={liveTailPath}
+                            liveTailingPaths={liveTailingPaths}
                             onSelectFolder={onSelectLogFolder ?? (() => {})}
+                            onToggleLiveTail={onToggleLiveTail}
                           />
                         ))}
                       </ul>

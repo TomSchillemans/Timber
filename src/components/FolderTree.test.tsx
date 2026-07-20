@@ -79,23 +79,47 @@ describe("FolderTree", () => {
     );
   });
 
-  it("shows the live-tail dot only next to the folder being tailed", () => {
+  it("shows the live-tail dot as active only next to a tailed folder", () => {
     render(
       <FolderTree
         node={tree}
-        liveTailPath="/logs/web74/blocking/database"
+        liveTailingPaths={["/logs/web74/blocking/database"]}
         onSelectFolder={vi.fn()}
+        onToggleLiveTail={vi.fn()}
       />,
     );
 
-    const databaseButton = screen.getByText("database").closest("button");
-    const blockingButton = screen.getByText("blocking").closest("button");
+    const databaseRow = screen.getByText("database").closest("li");
+    const blockingRow = screen.getByText("blocking").closest("li");
 
     expect(
-      databaseButton?.querySelector(".live-tail-indicator--active"),
+      databaseRow?.querySelector(".live-tail-indicator--active"),
     ).not.toBeNull();
     expect(
-      blockingButton?.querySelector(".live-tail-indicator--active"),
+      blockingRow?.querySelector(
+        ":scope > .folder-tree__row > .folder-tree__live-tail-toggle",
+      ),
     ).toBeNull();
+  });
+
+  it("toggles live-tail for a folder without opening it", async () => {
+    const onSelectFolder = vi.fn();
+    const onToggleLiveTail = vi.fn();
+    render(
+      <FolderTree
+        node={tree}
+        onSelectFolder={onSelectFolder}
+        onToggleLiveTail={onToggleLiveTail}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /live volgen database aanzetten/i }),
+    );
+
+    expect(onToggleLiveTail).toHaveBeenCalledWith(
+      "/logs/web74/blocking/database",
+    );
+    expect(onSelectFolder).not.toHaveBeenCalled();
   });
 });

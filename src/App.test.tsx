@@ -20,12 +20,21 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(
     (event: string, handler: (event: { payload: unknown }) => void) => {
       (listenHandlers[event] ??= []).push(handler);
-      return Promise.resolve(() => {});
+      return Promise.resolve(() => {
+        listenHandlers[event] = (listenHandlers[event] ?? []).filter(
+          (h) => h !== handler,
+        );
+      });
     },
   ),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-notification", () => ({
+  isPermissionGranted: vi.fn(() => Promise.resolve(true)),
+  requestPermission: vi.fn(() => Promise.resolve("granted")),
+  sendNotification: vi.fn(),
 }));
 
 function emitTestEvent(event: string, payload: unknown) {
@@ -69,6 +78,7 @@ async function mockInvoke(overrides: Record<string, unknown> = {}) {
 describe("App", () => {
   beforeEach(async () => {
     Object.keys(listenHandlers).forEach((key) => delete listenHandlers[key]);
+    vi.clearAllMocks();
     await mockInvoke();
   });
 
@@ -182,7 +192,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("database"));
 
     const toggle = await screen.findByRole("button", {
-      name: /live volgen/i,
+      name: /^live volgen$/i,
     });
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(invoke).not.toHaveBeenCalledWith(
@@ -209,7 +219,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("database"));
 
     const toggle = await screen.findByRole("button", {
-      name: /live volgen/i,
+      name: /^live volgen$/i,
     });
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "true");
@@ -222,7 +232,9 @@ describe("App", () => {
 
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(toggle).toBeDisabled();
-    expect(invoke).toHaveBeenCalledWith("stop_watching");
+    expect(invoke).toHaveBeenCalledWith("stop_watching", {
+      folder: expect.stringContaining("database"),
+    });
   });
 
   it("shows a live-tail dot next to the folder in the sidebar once enabled", async () => {
@@ -231,17 +243,17 @@ describe("App", () => {
     await userEvent.click(await screen.findByText("/logs/web74"));
     await userEvent.click(await screen.findByText("database"));
 
-    const databaseLabel = screen.getByText("database").closest("button");
+    const databaseRow = screen.getByText("database").closest("li");
     expect(
-      databaseLabel?.querySelector(".live-tail-indicator--active"),
+      databaseRow?.querySelector(".live-tail-indicator--active"),
     ).toBeNull();
 
     await userEvent.click(
-      await screen.findByRole("button", { name: /live volgen/i }),
+      await screen.findByRole("button", { name: /^live volgen$/i }),
     );
 
     expect(
-      databaseLabel?.querySelector(".live-tail-indicator--active"),
+      databaseRow?.querySelector(".live-tail-indicator--active"),
     ).not.toBeNull();
   });
 
@@ -290,5 +302,174 @@ describe("App", () => {
 
     expect(screen.queryByText("should not appear")).not.toBeInTheDocument();
     expect(screen.getByText("database started")).toBeInTheDocument();
+  });
+
+  it("keeps tailing a folder in the background after switching to a different one", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^live volgen$/i }),
+    );
+    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
+      folder: expect.stringContaining("database"),
+      dates: [],
+    });
+
+    await userEvent.click(await screen.findByText("errors"));
+
+    const databaseRow = screen.getByText("database").closest("li");
+    expect(
+      databaseRow?.querySelector(".live-tail-indicator--active"),
+    ).not.toBeNull();
+    // stop_watching was never called for the database folder just because
+    // we navigated away from it.
+    expect(invoke).not.toHaveBeenCalledWith("stop_watching", {
+      folder: expect.stringContaining("database"),
+    });
+  });
+
+  it("toggles live-tail on a folder from the sidebar without opening it", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: /live volgen errors aanzetten/i,
+      }),
+    );
+
+    expect(invoke).toHaveBeenCalledWith("log_file_dates", {
+      folder: expect.stringContaining("errors"),
+    });
+    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
+      folder: expect.stringContaining("errors"),
+      dates: [],
+    });
+    // The open folder (database) is untouched.
+    expect(screen.getByText("database started")).toBeInTheDocument();
+  });
+
+  it("notifies (native + in-app) for a background folder's new entry, not the open one", async () => {
+    const { sendNotification } = await import(
+      "@tauri-apps/plugin-notification"
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: /live volgen errors aanzetten/i,
+      }),
+    );
+
+    emitTestEvent("log-entries-updated", {
+      folder: "/logs/web74/blocking/database",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "info",
+          node: null,
+          message: "open folder update",
+          extraFields: {},
+        },
+      ],
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+
+    emitTestEvent("log-entries-updated", {
+      folder: "/logs/web74/blocking/errors",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "error",
+          node: null,
+          message: "boom",
+          extraFields: {},
+        },
+      ],
+    });
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("errors") }),
+    );
+    expect(
+      await screen.findByText(/nieuwe activiteit in.*errors/i),
+    ).toBeInTheDocument();
+  });
+
+  it("does not send a second notification for the same folder within the cooldown window", async () => {
+    const { sendNotification } = await import(
+      "@tauri-apps/plugin-notification"
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: /live volgen errors aanzetten/i,
+      }),
+    );
+
+    const event = {
+      folder: "/logs/web74/blocking/errors",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "error",
+          node: null,
+          message: "first",
+          extraFields: {},
+        },
+      ],
+    };
+    emitTestEvent("log-entries-updated", event);
+    emitTestEvent("log-entries-updated", { ...event, entries: [] });
+
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("navigates to the folder when a toast's action is clicked", async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: /live volgen errors aanzetten/i,
+      }),
+    );
+
+    emitTestEvent("log-entries-updated", {
+      folder: "/logs/web74/blocking/errors",
+      entries: [
+        {
+          timestamp: "2026-07-17T10:05:00Z",
+          level: "error",
+          node: null,
+          message: "boom",
+          extraFields: {},
+        },
+      ],
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /ga naar map/i }),
+    );
+
+    expect(
+      await screen.findByText("/logs/web74/blocking/errors"),
+    ).toBeInTheDocument();
   });
 });
