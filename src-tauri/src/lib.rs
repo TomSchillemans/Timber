@@ -43,6 +43,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(log_watcher::WatcherState::default())
         .setup(|app| {
             let settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Instellingen…")

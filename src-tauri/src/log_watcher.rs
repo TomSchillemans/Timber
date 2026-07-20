@@ -1,6 +1,7 @@
 use crate::log_parser;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::Mutex;
@@ -20,11 +21,12 @@ struct LogEntriesUpdated {
     entries: Vec<log_parser::LogEntry>,
 }
 
-/// Holds the currently active watcher, if any. Only one folder is watched
-/// at a time — starting a new watch (or explicitly stopping) drops the
-/// previous `RecommendedWatcher`, which unwatches its path automatically.
+/// Holds the currently active watchers, keyed by folder path — multiple
+/// folders can be tailed at once. Replacing or removing the entry for a
+/// path drops that path's `RecommendedWatcher`, which unwatches it
+/// automatically; other folders' watchers are untouched.
 #[derive(Default)]
-pub struct WatcherState(Mutex<Option<RecommendedWatcher>>);
+pub struct WatcherState(Mutex<HashMap<String, RecommendedWatcher>>);
 
 fn stringify<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
@@ -68,15 +70,23 @@ fn watch_log_folder_impl<R: tauri::Runtime>(
         .map_err(stringify)?;
 
     let state = app.state::<WatcherState>();
-    *state.0.lock().map_err(|_| "watcher lock poisoned")? = Some(watcher);
+    state
+        .0
+        .lock()
+        .map_err(|_| "watcher lock poisoned")?
+        .insert(folder.clone(), watcher);
 
     spawn_reparse_loop(app.clone(), PathBuf::from(folder), dates, rx);
     Ok(())
 }
 
-fn stop_watching_impl<R: tauri::Runtime>(app: AppHandle<R>) -> Result<(), String> {
+fn stop_watching_impl<R: tauri::Runtime>(app: AppHandle<R>, folder: String) -> Result<(), String> {
     let state = app.state::<WatcherState>();
-    *state.0.lock().map_err(|_| "watcher lock poisoned")? = None;
+    state
+        .0
+        .lock()
+        .map_err(|_| "watcher lock poisoned")?
+        .remove(&folder);
     Ok(())
 }
 
@@ -90,8 +100,8 @@ pub fn watch_log_folder(
 }
 
 #[tauri::command(async)]
-pub fn stop_watching(app: AppHandle) -> Result<(), String> {
-    stop_watching_impl(app)
+pub fn stop_watching(app: AppHandle, folder: String) -> Result<(), String> {
+    stop_watching_impl(app, folder)
 }
 
 #[cfg(test)]
@@ -151,21 +161,62 @@ mod tests {
     }
 
     #[test]
-    fn test_stop_watching_clears_state() {
-        let dir = tempdir().unwrap();
+    fn test_stop_watching_removes_only_that_folder() {
+        let dir_a = tempdir().unwrap();
+        let dir_b = tempdir().unwrap();
         let app = mock_app();
         let handle = app.handle().clone();
+        let path_a = dir_a.path().to_string_lossy().into_owned();
+        let path_b = dir_b.path().to_string_lossy().into_owned();
 
-        watch_log_folder_impl(
-            handle.clone(),
-            dir.path().to_string_lossy().into_owned(),
-            None,
-        )
-        .unwrap();
-        assert!(handle.state::<WatcherState>().0.lock().unwrap().is_some());
+        watch_log_folder_impl(handle.clone(), path_a.clone(), None).unwrap();
+        watch_log_folder_impl(handle.clone(), path_b.clone(), None).unwrap();
+        assert_eq!(handle.state::<WatcherState>().0.lock().unwrap().len(), 2);
 
-        stop_watching_impl(handle.clone()).unwrap();
+        stop_watching_impl(handle.clone(), path_a.clone()).unwrap();
 
-        assert!(handle.state::<WatcherState>().0.lock().unwrap().is_none());
+        let state = handle.state::<WatcherState>();
+        let watchers = state.0.lock().unwrap();
+        assert_eq!(watchers.len(), 1);
+        assert!(!watchers.contains_key(&path_a));
+        assert!(watchers.contains_key(&path_b));
+    }
+
+    #[test]
+    fn test_watching_two_folders_at_once_both_emit_updates() {
+        let dir_a = tempdir().unwrap();
+        let dir_b = tempdir().unwrap();
+        fs::write(dir_a.path().join("app"), "").unwrap();
+        fs::write(dir_b.path().join("app"), "").unwrap();
+
+        let app = mock_app();
+        let handle = app.handle().clone();
+        let (tx, rx) = std::sync::mpsc::channel::<LogEntriesUpdated>();
+        let tx_b = tx.clone();
+        handle.listen(LOG_ENTRIES_UPDATED_EVENT, move |event| {
+            let payload: LogEntriesUpdated = serde_json::from_str(event.payload()).unwrap();
+            let _ = tx_b.send(payload);
+        });
+
+        let path_a = dir_a.path().to_string_lossy().into_owned();
+        let path_b = dir_b.path().to_string_lossy().into_owned();
+        watch_log_folder_impl(handle.clone(), path_a.clone(), None).unwrap();
+        watch_log_folder_impl(handle.clone(), path_b.clone(), None).unwrap();
+
+        std::thread::sleep(Duration::from_millis(100));
+        fs::write(dir_a.path().join("app"), "{\"message\": \"from a\"}\n").unwrap();
+        fs::write(dir_b.path().join("app"), "{\"message\": \"from b\"}\n").unwrap();
+
+        let mut seen_folders = Vec::new();
+        for _ in 0..2 {
+            match rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(payload) => seen_folders.push(payload.folder),
+                Err(e) => panic!("expected an update from both folders: {e}"),
+            }
+        }
+        seen_folders.sort();
+        let mut expected = vec![path_a, path_b];
+        expected.sort();
+        assert_eq!(seen_folders, expected);
     }
 }
