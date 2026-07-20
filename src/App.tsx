@@ -50,6 +50,16 @@ function App() {
   // Folders currently being tailed, independent of which one is open —
   // switching to look at a different folder doesn't stop the others.
   const [liveTailingPaths, setLiveTailingPaths] = useState<string[]>([]);
+  // Folders with a watch/unwatch command currently in flight. Guards
+  // against a second click on the same folder's toggle firing another
+  // command before the first resolves — since watch_log_folder and
+  // stop_watching are async Tauri commands with no ordering guarantee
+  // across separate invocations, overlapping calls for the same path can
+  // otherwise leave the backend watcher state diverged from what the UI
+  // shows (or double-register a watcher).
+  const [pendingTogglePaths, setPendingTogglePaths] = useState<Set<string>>(
+    new Set(),
+  );
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dateFormatSettings, setDateFormatSettings] =
     useState<DateFormatSettings>(DEFAULT_DATE_FORMAT_SETTINGS);
@@ -61,7 +71,13 @@ function App() {
   const lastNotifiedAtRef = useRef<Record<string, number>>({});
   // Set by jumpToFolder when the target folder's root isn't active yet, so
   // the folder_scanner effect can select it once that root's tree loads.
-  const pendingJumpPathRef = useRef<string | null>(null);
+  // Scoped to the root it was requested for, so an unrelated root's tree
+  // load (e.g. the user manually navigating elsewhere while the jump's
+  // root is still loading) can't consume a stale jump meant for a
+  // different root.
+  const pendingJumpPathRef = useRef<{ root: string; path: string } | null>(
+    null,
+  );
 
   // Live-tailing only makes sense while looking at the most recent day (or
   // when the folder has no dated files at all) — new lines don't belong to
@@ -115,8 +131,8 @@ function App() {
       .then((tree) => {
         if (!cancelled) {
           setFolderTree(tree);
-          if (pendingJumpPathRef.current) {
-            setSelectedLogFolder(pendingJumpPathRef.current);
+          if (pendingJumpPathRef.current?.root === activeFolder) {
+            setSelectedLogFolder(pendingJumpPathRef.current.path);
             pendingJumpPathRef.current = null;
           }
         }
@@ -300,40 +316,53 @@ function App() {
     if (root.path === activeFolder) {
       setSelectedLogFolder(path);
     } else {
-      pendingJumpPathRef.current = path;
+      pendingJumpPathRef.current = { root: root.path, path };
       setActiveFolder(root.path);
     }
   }
 
   async function toggleLiveTail(path: string) {
-    if (liveTailingPaths.includes(path)) {
-      setLiveTailingPaths((prev) => prev.filter((p) => p !== path));
-      invoke("stop_watching", { folder: path }).catch(() => {});
+    if (pendingTogglePaths.has(path)) {
       return;
     }
+    setPendingTogglePaths((prev) => new Set(prev).add(path));
 
-    let dates: string[];
-    if (path === selectedLogFolder) {
-      if (!isMostRecentDaySelected) {
+    try {
+      if (liveTailingPaths.includes(path)) {
+        setLiveTailingPaths((prev) => prev.filter((p) => p !== path));
+        await invoke("stop_watching", { folder: path }).catch(() => {});
         return;
       }
-      dates = selectedDates;
-    } else {
-      try {
-        const datesForPath = await invoke<string[]>("log_file_dates", {
-          folder: path,
-        });
-        dates = datesForPath.length > 0 ? [datesForPath[0]] : [];
-      } catch (e) {
-        setError(String(e));
-        return;
+
+      let dates: string[];
+      if (path === selectedLogFolder) {
+        if (!isMostRecentDaySelected) {
+          return;
+        }
+        dates = selectedDates;
+      } else {
+        try {
+          const datesForPath = await invoke<string[]>("log_file_dates", {
+            folder: path,
+          });
+          dates = datesForPath.length > 0 ? [datesForPath[0]] : [];
+        } catch (e) {
+          setError(String(e));
+          return;
+        }
       }
+
+      setLiveTailingPaths((prev) => [...prev, path]);
+      await invoke("watch_log_folder", { folder: path, dates }).catch((e) =>
+        setError(String(e)),
+      );
+    } finally {
+      setPendingTogglePaths((prev) => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
     }
-
-    setLiveTailingPaths((prev) => [...prev, path]);
-    invoke("watch_log_folder", { folder: path, dates }).catch((e) =>
-      setError(String(e)),
-    );
   }
 
   const handleResizeMove = useCallback((event: MouseEvent) => {
@@ -432,6 +461,7 @@ function App() {
           onRenameFolder={handleRenameFolder}
           liveTailingPaths={liveTailingPaths}
           onToggleLiveTail={toggleLiveTail}
+          pendingTogglePaths={pendingTogglePaths}
         />
       </aside>
 
@@ -462,7 +492,10 @@ function App() {
               type="button"
               className="live-tail-toggle"
               aria-pressed={isLiveTailing}
-              disabled={!isMostRecentDaySelected}
+              disabled={
+                !isMostRecentDaySelected ||
+                pendingTogglePaths.has(selectedLogFolder)
+              }
               title={
                 isMostRecentDaySelected
                   ? "Live volgen aan/uit"

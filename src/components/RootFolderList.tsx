@@ -20,6 +20,7 @@ interface RootFolderListProps {
   onRenameFolder?: (path: string, displayName: string | null) => void;
   liveTailingPaths?: string[];
   onToggleLiveTail?: (path: string) => void;
+  pendingTogglePaths?: Set<string>;
 }
 
 export function RootFolderList({
@@ -34,6 +35,7 @@ export function RootFolderList({
   onRenameFolder,
   liveTailingPaths,
   onToggleLiveTail,
+  pendingTogglePaths,
 }: RootFolderListProps) {
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -166,6 +168,7 @@ export function RootFolderList({
                             liveTailingPaths={liveTailingPaths}
                             onSelectFolder={onSelectLogFolder ?? (() => {})}
                             onToggleLiveTail={onToggleLiveTail}
+                            pendingTogglePaths={pendingTogglePaths}
                           />
                         ))}
                       </ul>

@@ -13,6 +13,7 @@ interface FolderTreeProps {
   liveTailingPaths?: string[];
   onSelectFolder: (path: string) => void;
   onToggleLiveTail?: (path: string) => void;
+  pendingTogglePaths?: Set<string>;
 }
 
 export function FolderTree({
@@ -21,11 +22,13 @@ export function FolderTree({
   liveTailingPaths,
   onSelectFolder,
   onToggleLiveTail,
+  pendingTogglePaths,
 }: FolderTreeProps) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = node.children.length > 0;
   const isSelected = node.path === selectedPath;
   const isTailing = Boolean(liveTailingPaths?.includes(node.path));
+  const isPending = Boolean(pendingTogglePaths?.has(node.path));
 
   function handleClick() {
     if (hasChildren) {
@@ -61,6 +64,7 @@ export function FolderTree({
             type="button"
             className="folder-tree__live-tail-toggle"
             aria-pressed={isTailing}
+            disabled={isPending}
             aria-label={`Live volgen ${node.name} ${
               isTailing ? "uitzetten" : "aanzetten"
             }`}
@@ -89,6 +93,7 @@ export function FolderTree({
               liveTailingPaths={liveTailingPaths}
               onSelectFolder={onSelectFolder}
               onToggleLiveTail={onToggleLiveTail}
+              pendingTogglePaths={pendingTogglePaths}
             />
           ))}
         </ul>
