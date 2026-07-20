@@ -78,4 +78,48 @@ describe("FolderTree", () => {
       "folder-tree__label--selected",
     );
   });
+
+  it("shows the live-tail dot as active only next to a tailed folder", () => {
+    render(
+      <FolderTree
+        node={tree}
+        liveTailingPaths={["/logs/web74/blocking/database"]}
+        onSelectFolder={vi.fn()}
+        onToggleLiveTail={vi.fn()}
+      />,
+    );
+
+    const databaseRow = screen.getByText("database").closest("li");
+    const blockingRow = screen.getByText("blocking").closest("li");
+
+    expect(
+      databaseRow?.querySelector(".live-tail-indicator--active"),
+    ).not.toBeNull();
+    expect(
+      blockingRow?.querySelector(
+        ":scope > .folder-tree__row > .folder-tree__live-tail-toggle",
+      ),
+    ).toBeNull();
+  });
+
+  it("toggles live-tail for a folder without opening it", async () => {
+    const onSelectFolder = vi.fn();
+    const onToggleLiveTail = vi.fn();
+    render(
+      <FolderTree
+        node={tree}
+        onSelectFolder={onSelectFolder}
+        onToggleLiveTail={onToggleLiveTail}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /live volgen database aanzetten/i }),
+    );
+
+    expect(onToggleLiveTail).toHaveBeenCalledWith(
+      "/logs/web74/blocking/database",
+    );
+    expect(onSelectFolder).not.toHaveBeenCalled();
+  });
 });

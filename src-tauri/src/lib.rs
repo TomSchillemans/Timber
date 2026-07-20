@@ -1,5 +1,6 @@
 mod folder_scanner;
 mod log_parser;
+mod log_watcher;
 mod root_folders;
 mod settings;
 
@@ -42,6 +43,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .manage(log_watcher::WatcherState::default())
         .setup(|app| {
             let settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Instellingen…")
                 .accelerator("CmdOrCtrl+,")
@@ -97,6 +100,8 @@ pub fn run() {
             folder_scanner::folder_scanner,
             log_parser::log_parser,
             log_parser::log_file_dates,
+            log_watcher::watch_log_folder,
+            log_watcher::stop_watching,
             settings::get_date_format_settings,
             settings::save_date_format_settings
         ])

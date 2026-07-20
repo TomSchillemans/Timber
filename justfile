@@ -24,7 +24,7 @@ dev:
     npm run tauri dev
 
 # Run frontend unit tests (optionally specify a path)
-test PATH="src/**/*.test.tsx":
+test PATH="src/**/*.test.{ts,tsx}":
     npx vitest run {{PATH}}
 
 # Run all tests (frontend + backend)
