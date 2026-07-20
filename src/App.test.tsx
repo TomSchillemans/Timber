@@ -200,10 +200,13 @@ describe("App", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /^live volgen$/i }),
     );
-    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
-      folder: expect.stringContaining("database"),
-      dates: [],
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "watch_log_folder",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+        dates: [],
+      }),
+    );
 
     // Removing "/logs/web7" must not be treated as an ancestor of
     // "/logs/web74/..." just because the path string "web7" is a prefix
@@ -216,9 +219,12 @@ describe("App", () => {
     expect(
       databaseRow?.querySelector(".live-tail-indicator--active"),
     ).not.toBeNull();
-    expect(invoke).not.toHaveBeenCalledWith("stop_watching", {
-      folder: expect.stringContaining("database"),
-    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "stop_watching",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+      }),
+    );
   });
 
   it("does not watch automatically — live-tailing starts off until the toggle is clicked", async () => {
@@ -240,10 +246,13 @@ describe("App", () => {
 
     await userEvent.click(toggle);
 
-    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
-      folder: expect.stringContaining("database"),
-      dates: [],
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "watch_log_folder",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+        dates: [],
+      }),
+    );
     expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -270,9 +279,52 @@ describe("App", () => {
 
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(toggle).toBeDisabled();
-    expect(invoke).toHaveBeenCalledWith("stop_watching", {
-      folder: expect.stringContaining("database"),
+    expect(invoke).toHaveBeenCalledWith(
+      "stop_watching",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+      }),
+    );
+  });
+
+  it("tags stop_watching with a higher seq than an in-flight watch_log_folder for the same folder", async () => {
+    // Regression test: the day-filter-off effect used to call stop_watching
+    // directly, racing an in-flight watch_log_folder for the same folder —
+    // if the backend applied them out of issuance order, the watcher could
+    // survive despite the UI showing tailing as off. The backend now
+    // resolves this by seq (see log_watcher.rs), and the frontend's
+    // responsibility is to always assign a strictly increasing seq in
+    // issuance order — this test locks in that contract.
+    await mockInvoke({ log_file_dates: ["2026-07-16", "2026-07-14"] });
+    const { invoke } = await import("@tauri-apps/api/core");
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByText("/logs/web74"));
+    await userEvent.click(await screen.findByText("database"));
+
+    const toggle = await screen.findByRole("button", {
+      name: /^live volgen$/i,
     });
+    await userEvent.click(toggle);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /2026-07-16/ }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "16" }));
+    await userEvent.click(screen.getByRole("button", { name: "14" }));
+
+    const watchCall = vi
+      .mocked(invoke)
+      .mock.calls.find(([command]) => command === "watch_log_folder");
+    const stopCall = vi
+      .mocked(invoke)
+      .mock.calls.find(([command]) => command === "stop_watching");
+    expect(watchCall).toBeDefined();
+    expect(stopCall).toBeDefined();
+    const watchSeq = (watchCall?.[1] as { seq: number }).seq;
+    const stopSeq = (stopCall?.[1] as { seq: number }).seq;
+    expect(stopSeq).toBeGreaterThan(watchSeq);
   });
 
   it("shows a live-tail dot next to the folder in the sidebar once enabled", async () => {
@@ -352,10 +404,13 @@ describe("App", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /^live volgen$/i }),
     );
-    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
-      folder: expect.stringContaining("database"),
-      dates: [],
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "watch_log_folder",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+        dates: [],
+      }),
+    );
 
     await userEvent.click(await screen.findByText("errors"));
 
@@ -365,9 +420,12 @@ describe("App", () => {
     ).not.toBeNull();
     // stop_watching was never called for the database folder just because
     // we navigated away from it.
-    expect(invoke).not.toHaveBeenCalledWith("stop_watching", {
-      folder: expect.stringContaining("database"),
-    });
+    expect(invoke).not.toHaveBeenCalledWith(
+      "stop_watching",
+      expect.objectContaining({
+        folder: expect.stringContaining("database"),
+      }),
+    );
   });
 
   it("toggles live-tail on a folder from the sidebar without opening it", async () => {
@@ -387,10 +445,13 @@ describe("App", () => {
     expect(invoke).toHaveBeenCalledWith("log_file_dates", {
       folder: expect.stringContaining("errors"),
     });
-    expect(invoke).toHaveBeenCalledWith("watch_log_folder", {
-      folder: expect.stringContaining("errors"),
-      dates: [],
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "watch_log_folder",
+      expect.objectContaining({
+        folder: expect.stringContaining("errors"),
+        dates: [],
+      }),
+    );
     // The open folder (database) is untouched.
     expect(screen.getByText("database started")).toBeInTheDocument();
   });

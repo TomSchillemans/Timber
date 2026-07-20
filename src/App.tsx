@@ -69,6 +69,16 @@ function App() {
   const mainPaneRef = useRef<HTMLElement>(null);
   const isNearBottomRef = useRef(true);
   const lastNotifiedAtRef = useRef<Record<string, number>>({});
+  // watch_log_folder/stop_watching are async Tauri commands with no
+  // ordering guarantee across separate invocations. Tagging each call with
+  // a synchronously-assigned, monotonically increasing sequence number lets
+  // the backend apply them in issuance order rather than completion order,
+  // so a stale call that resolves late can't undo a newer one.
+  const watchSeqRef = useRef(0);
+  function nextWatchSeq(): number {
+    watchSeqRef.current += 1;
+    return watchSeqRef.current;
+  }
   // Set by jumpToFolder when the target folder's root isn't active yet, so
   // the folder_scanner effect can select it once that root's tree loads.
   // Scoped to the root it was requested for, so an unrelated root's tree
@@ -220,7 +230,10 @@ function App() {
       setLiveTailingPaths((prev) =>
         prev.filter((p) => p !== selectedLogFolder),
       );
-      invoke("stop_watching", { folder: selectedLogFolder }).catch(() => {});
+      invoke("stop_watching", {
+        folder: selectedLogFolder,
+        seq: nextWatchSeq(),
+      }).catch(() => {});
     }
   }, [selectedLogFolder, isMostRecentDaySelected, liveTailingPaths]);
 
@@ -330,7 +343,10 @@ function App() {
     try {
       if (liveTailingPaths.includes(path)) {
         setLiveTailingPaths((prev) => prev.filter((p) => p !== path));
-        await invoke("stop_watching", { folder: path }).catch(() => {});
+        await invoke("stop_watching", {
+          folder: path,
+          seq: nextWatchSeq(),
+        }).catch(() => {});
         return;
       }
 
@@ -353,9 +369,11 @@ function App() {
       }
 
       setLiveTailingPaths((prev) => [...prev, path]);
-      await invoke("watch_log_folder", { folder: path, dates }).catch((e) =>
-        setError(String(e)),
-      );
+      await invoke("watch_log_folder", {
+        folder: path,
+        dates,
+        seq: nextWatchSeq(),
+      }).catch((e) => setError(String(e)));
     } finally {
       setPendingTogglePaths((prev) => {
         const next = new Set(prev);
@@ -415,7 +433,9 @@ function App() {
           prev.filter((p) => !affectedTailedPaths.includes(p)),
         );
         affectedTailedPaths.forEach((p) => {
-          invoke("stop_watching", { folder: p }).catch(() => {});
+          invoke("stop_watching", { folder: p, seq: nextWatchSeq() }).catch(
+            () => {},
+          );
         });
       }
 
